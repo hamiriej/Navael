@@ -8,6 +8,8 @@ import { logActivity } from '@/lib/activityLog'; // Assuming this path is correc
 import { useAuth } from './auth-context'; // Assuming this path is correct
 import { format } from 'date-fns'; // Using date-fns for date formatting
 
+export const PATIENT_STORAGE_KEY = 'patientId';
+
 // --- Refined Patient Interface (for Database Storage) ---
 // This interface defines the structure of a patient object AS IT WILL BE STORED IN FIRESTORE.
 export interface Patient {

@@ -1,11 +1,13 @@
+// src/contexts/patient-auth-context.tsx
 
 "use client";
 
 import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import type { Patient } from '@/contexts/patient-context'; // Using the existing Patient type
-import { PATIENT_STORAGE_KEY } from '@/contexts/patient-context'; // Using the existing key for patient data
+// Using the existing Patient and AugmentedPatient types
+import { PATIENT_STORAGE_KEY, type Patient, type AugmentedPatient } from '@/contexts/patient-context'; 
+import { usePatients } from './patient-context'; // Keep this import, though not directly used in the login logic for now
 
 interface PatientAuthContextType {
   isAuthenticated: boolean;
@@ -80,11 +82,15 @@ export function PatientAuthProvider({ children }: { children: ReactNode }) {
           setIsLoading(false);
           return false;
         }
-        // Login successful
-        const authData: PatientAuthStorage = { patientId: matchedPatient.id, patientName: matchedPatient.name };
+        
+        // FIX START: Construct the 'name' from firstName and lastName
+        const patientFullName = `${matchedPatient.firstName} ${matchedPatient.lastName}`;
+        const authData: PatientAuthStorage = { patientId: matchedPatient.id, patientName: patientFullName };
+        // FIX END
+        
         localStorage.setItem(PATIENT_AUTH_STORAGE_KEY, JSON.stringify(authData));
         setPatientIdState(matchedPatient.id);
-        setPatientNameState(matchedPatient.name);
+        setPatientNameState(patientFullName); // Use the constructed full name here
         setIsLoading(false);
         router.push('/patient-portal/dashboard');
         return true;
