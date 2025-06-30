@@ -21,7 +21,7 @@ export interface LabTest {
   id?: string; // Optional for new tests
   name: string;
   price?: number; // Optional, can be derived
-  status: "Pending Sample" | "Processing" | "Results Ready" | "Cancelled";
+  status: "Pending Sample" | "Processing" | "Results Ready" | "Cancelled"| "Sample Collected"| "Awaiting Verification"| "Result Entered";
   result?: string;
   referenceRange?: string;
   unit?: string;
@@ -34,7 +34,7 @@ export interface LabOrder {
   orderDate: string; // ISO string
   orderingDoctor: string;
   tests: LabTest[]; // Array of LabTest objects
-  status: "Pending Sample" | "Processing" | "Results Ready" | "Cancelled";
+  status: "Pending Sample" | "Processing" | "Results Ready" | "Cancelled"| "Sample Collected"| "Awaiting Verification"| "Result Entered";
   clinicalNotes?: string;
   sampleCollectionDate?: string; // ISO string
   sampleCollector?: string;
