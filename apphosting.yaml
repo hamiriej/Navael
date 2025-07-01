@@ -4,55 +4,13 @@
 runConfig:
   maxInstances: 1
 
-env:
-  # 1. SERVICE_ACCOUNT_KEY for Firebase Admin SDK
-  # This is an extremely sensitive private key.
-  # DO NOT store its actual value directly in this file or any version control.
-  # Store it securely in Google Cloud Secret Manager and reference it here.
-  - variable: SERVICE_ACCOUNT_KEY
-    valueFrom:
-      # Replace 'service-account-key-secret' with the actual name of your secret
-      # in Google Cloud Secret Manager that holds your base64-encoded service account key.
-      secret: service-account-key-secret
+# The 'env' section is completely omitted for these variables.
+# This means your running App Hosting backend WILL NOT have
+# process.env.SERVICE_ACCOUNT_KEY or process.env.GOOGLE_API_KEY available.
+# Any code in your backend that relies on these environment variables
+# will likely fail.
 
-  # 2. GOOGLE_API_KEY for Genkit AI features (REQUIRED for Genkit)
-  # This key was flagged by GitHub because its direct exposure is a security risk.
-  # DO NOT store its actual value directly in this file or any version control.
-  # Store it securely in Google Cloud Secret Manager and reference it here.
-  - variable: GOOGLE_API_KEY
-    valueFrom:
-      # Replace 'genkit-google-api-key-secret' with the actual name of your secret
-      # in Google Cloud Secret Manager that holds your Google API key for Genkit.
-      secret: genkit-google-api-key-secret
+# The Firebase App Hosting build environment still implicitly sets FIREBASE_CONFIG
+# and FIREBASE_WEBAPP_CONFIG for your client-side app.
+# You will still need to ensure your client-side code correctly uses these.
 
-  # 3. NEXT_PUBLIC_FIREBASE_ environment variables for client-side Firebase config
-  # While the client-side API key (NEXT_PUBLIC_FIREBASE_API_KEY) is often
-  # considered less sensitive than a service account key, it's still best practice
-  # to keep it out of direct source code if possible, especially if it was
-  # previously flagged. Store it in Secret Manager for consistency.
-  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    valueFrom:
-      # Replace 'firebase-webapp-api-key-secret' with the actual name of your secret
-      # in Google Cloud Secret Manager that holds your client-side Firebase API key.
-      secret: firebase-webapp-api-key-secret
-
-  # The following client-side variables (authDomain, projectId, etc.) are generally
-  # not sensitive. They identify your Firebase project but don't grant access.
-  # Therefore, it's typically fine to keep them directly in this file for clarity
-  # and ease of configuration, especially for build-time operations like prerendering.
-  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-    value: "navael.firebaseapp.com"
-  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-    value: "navael"
-  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-    value: "navael.firebasestorage.app"
-  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-    value: "36160001734"
-  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-    value: "1:36160001734:web:ee096485297757ec1c29c7"
-
-  # The Firebase App Hosting build environment also implicitly sets FIREBASE_CONFIG
-  # and FIREBASE_WEBAPP_CONFIG based on your project details and the provided
-  # individual NEXT_PUBLIC_FIREBASE_ variables. You generally don't need to
-  # define these explicitly in apphosting.yaml unless you have a very custom setup.
-  # The fact that you see them in the log means they are being set up.
