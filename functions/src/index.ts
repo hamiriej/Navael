@@ -1,131 +1,70 @@
 // functions/src/index.ts
+import * as functions from 'firebase-functions/v2'; // Ensure this is v2 import
+import * as admin from 'firebase-admin';
+import { defineSecret } from 'firebase-functions/params';
 
-import * as functions from "firebase-functions";
-import * as admin from "firebase-admin";
+// Define the secret parameter.
+const serviceAccountSecret = defineSecret('SERVICE_ACCOUNT_KEY');
 
-// Initialize Firebase Admin SDK (it automatically uses credentials when deployed to Firebase)
-admin.initializeApp();
+// This Cloud Function will perform an admin operation, getting the service account key from secrets.
+export const performAdminOperation = functions
+  .https.onCall(
+    // Pass secrets directly in the options object for v2 functions
+    { secrets: [serviceAccountSecret] },
+    // **KEY CHANGE HERE:** Single 'request' parameter for v2 callable functions
+    async (request: functions.https.CallableRequest<any>) => {
+      // Data validation
+      // Access payload via request.data
+      if (!request.data || typeof request.data.payload === 'undefined') {
+        throw new functions.https.HttpsError('invalid-argument', 'Payload is required.');
+      }
 
-// Get a reference to Firestore
-const db = admin.firestore();
+      // Access the secret's value.
+      const serviceAccountKeyBase64 = serviceAccountSecret.value();
 
-// Define allowed roles (ensure these match your frontend's ALL_ROLES or ROLES)
-const ALLOWED_ROLES = ["Administrator", "Doctor", "Nurse", "Receptionist", "Pharmacist", "Lab Technician"];
+      if (!serviceAccountKeyBase64) {
+        throw new functions.https.HttpsError('internal', 'SERVICE_ACCOUNT_KEY secret not found or accessible.');
+      }
 
-// Define the expected structure of the data argument for the callable function
-interface CreateUserRequestData {
-  email: string;
-  password: string;
-  role: string; // This should match a string from ALLOWED_ROLES
-  name: string;
-  staffId: string;
-}
+      let app: admin.app.App | undefined; // Declare app outside try-catch for finally block
 
-/**
- * Helper function to work around HttpsError type issues in some TypeScript/Firebase Functions setups.
- * This explicitly casts the HttpsError constructor to 'any' to bypass strict type checking.
- */
-function createHttpsError(code: functions.https.FunctionsErrorCode, message: string, details?: unknown): functions.https.HttpsError {
-    // We are deliberately casting to 'any' here because some TS configs
-    // are incorrectly flagging HttpsError as not constructable.
-    return new (functions.https.HttpsError as any)(code, message, details);
-}
+      try {
+        // Initialize admin SDK using the key *within this function*
+        const serviceAccount = JSON.parse(
+          Buffer.from(serviceAccountKeyBase64, 'base64').toString('ascii')
+        );
 
+        const appName = `adminApp_${Date.now()}`; // Unique name for this app instance
 
-// This function will be called from your Next.js frontend
-// It's an HTTPS Callable function, so it's easy to call from client-side code.
-export const createUserWithRole = functions.https.onCall(async (request) => {
-  // Extract data and auth context from the request object
-  const data = request.data as CreateUserRequestData; // Explicitly cast data to your interface
-  const context = request; // The request object itself holds the context (including auth)
+        // More robust Admin SDK initialization: try to get existing, or initialize if not found
+        try {
+          app = admin.app(appName); // Try to get an already initialized app by this name
+        } catch (e) {
+          // If app doesn't exist, initialize it
+          app = admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+            // You might need to specify other options like databaseURL, storageBucket if using other services
+          }, appName);
+        }
 
-  // 1. Authenticate the caller: Only admins should be able to create users
-  // This checks if the user making the request is authenticated and has the 'Administrator' role.
-  if (!context.auth) {
-    throw createHttpsError( // <-- CHANGED
-      "unauthenticated",
-      "Only authenticated users can create accounts."
-    );
-  }
-  // Fetch the caller's role from Firestore (or custom claims if you've set them up for admins)
-  const callerUid = context.auth.uid;
-  const callerDoc = await db.collection("users").doc(callerUid).get();
-  const callerRole = callerDoc.data()?.role;
+        const firestore = app.firestore();
+        // Perform your Firestore Admin SDK operation here
+        // Access payload via request.data.payload
+        const docRef = await firestore.collection('someCollection').add(request.data.payload); // Example operation
+        return { success: true, docId: docRef.id };
 
-  if (callerRole !== "Administrator") {
-    throw createHttpsError( // <-- CHANGED
-      "permission-denied",
-      "Only administrators can create new user accounts."
-    );
-  }
-
-  // 2. Validate input data
-  // Directly use properties from the typed 'data' object
-  const { email, password, role, name, staffId } = data;
-
-  if (!email || !password || !role || !name || !staffId) {
-    throw createHttpsError( // <-- CHANGED
-      "invalid-argument",
-      "The function must be called with 'email', 'password', 'role', 'name', and 'staffId'."
-    );
-  }
-  if (!ALLOWED_ROLES.includes(role)) {
-    throw createHttpsError( // <-- CHANGED
-      "invalid-argument",
-      `Invalid role: ${role}. Allowed roles are: ${ALLOWED_ROLES.join(", ")}.`
-    );
-  }
-  if (password.length < 6) {
-    throw createHttpsError( // <-- CHANGED
-      "invalid-argument",
-      "Password must be at least 6 characters long."
-    );
-  }
-
-  try {
-    // 3. Create user in Firebase Authentication
-    const userRecord = await admin.auth().createUser({
-      email: email,
-      password: password,
-      displayName: name,
-      emailVerified: true, // You might want to set this to false for new users to verify later
-      disabled: false,
-    });
-
-    // 4. Store user's profile and role in Firestore
-    // We use the user's UID (User ID) from Firebase Auth as the Document ID in Firestore.
-    await db.collection("users").doc(userRecord.uid).set({
-      uid: userRecord.uid,
-      email: email,
-      name: name,
-      role: role,
-      staffId: staffId,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      // You can add more fields here like department, phone, address, etc.
-    });
-
-    // 5. (Optional but recommended) Set custom claims for role
-    // Custom claims are useful for role-based security rules and client-side access control.
-    await admin.auth().setCustomUserClaims(userRecord.uid, { role: role });
-
-    return {
-      uid: userRecord.uid,
-      email: userRecord.email,
-      role: role,
-      message: "User created successfully!",
-    };
-  } catch (error: any) { // Keeping error: any for now, but in real code, you'd narrow this.
-    // Handle Firebase Auth errors (e.g., email already in use)
-    if (error.code === 'auth/email-already-exists') {
-      throw createHttpsError( // <-- CHANGED
-        "already-exists",
-        "The email address is already in use by another account."
-      );
+      } catch (error: unknown) { // Explicitly type catch variable as unknown
+        console.error("Error in Cloud Function admin operation:", error);
+        let errorMessage = 'An unknown error occurred.';
+        if (error instanceof Error) { // Safely check error type
+          errorMessage = error.message;
+        }
+        throw new functions.https.HttpsError('internal', 'Admin operation failed', errorMessage);
+      } finally {
+        // Clean up the temporary app instance if created and if it's not the default app
+        if (app && app.name !== '[DEFAULT]') {
+          await app.delete();
+        }
+      }
     }
-    console.error("Error creating user:", error);
-    throw createHttpsError( // <-- CHANGED
-      "internal",
-      "Failed to create user. An unexpected error occurred."
-    );
-  }
-});
+  );
