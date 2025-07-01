@@ -5,19 +5,41 @@ runConfig:
   maxInstances: 1
 
 env:
-  # 1. SERVICE_ACCOUNT_KEY for Firebase Admin SDK (already in your file)
+  # 1. SERVICE_ACCOUNT_KEY for Firebase Admin SDK
+  # This is an extremely sensitive private key.
+  # DO NOT store its actual value directly in this file or any version control.
+  # Store it securely in Google Cloud Secret Manager and reference it here.
   - variable: SERVICE_ACCOUNT_KEY
-    value: "ewogICJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsCiAgInByb2plY3RfaWQiOiAibmF2YWVsIiwKICAicHJpdmF0ZV9rZXlfaWQiOiAiNzg1ZDQ3MmI2MWExYTU3NzcxMzJmYzk1MDU2ODcyMDQ4Y2FiM2MxNSIsCiAgInByaXZhdGVfa2V5IjogIi0tLS0tQkVHSU4gUFJJVkFURSBLRVktLS0tLVxuTUlJRXZBSUJBREFOQmdrcWhraUc5dzBCQVFFRkFBU0NCS1l3Z2dTaUFnRUFBb0lCQVFEcUJQTEdNcFVQYlMrOVxucUk3Vk5XWlNLc1RoMFNuSTB3elRiUWZIY0ttL3BiVE1tMXpDUmQrdlVDZXdRS01BY0pkSHp6NXU0M0xRYjZZOFxuTXVDU21PdmIyTzBkQmkyTjI1TkZta3BZdXJxaEI5M200N3ArQThJb3ROczMxKzg1Z3NJRjhIdDYrNjdqYmpLaVxuT051RlZESkJZYjBENnJmWjNrSVZkMTlac2lTOXlJL3JMengwQzU2aTZwRmdDOVh6YUd3Z3hTdUl4YWtIS0FKK1xueGQ0eFk3YndURmh2VXprN0wwMW5GMGdFdGxBamQxaHg3YjBFZ0JkYUs3YlZucnBaMkN5UVVtZThSeFRDcGlBYVxuTk9KZmhpQmR3ZFQrTDRiLzZJOWxnd3FlWmhmQVlld0JqWWU0UUVHVHVaczlWVHR5RFVmNmlGd1dOdjN1L1AwblxuVE0yaVdiZW5BZ01CQUFFQ2dnRUFCT2dCcHdJY2VleFNHZW5VeE1lUDA1MHQ3NFlSR0RMRWpCSTNIWWxSSmNGMVxubnV5SzcwL0R0c3M1YWNxUklFczhBTGRwbWEyUEZLdWlrcFNHZk14VDlaSUF0cUVRaDI3WkVaYUFoSWUxcmZhYVxuUW1MMzMvaDRNNTVIRWs2bXAxQUVmVmRqWDFxemVmVXZmcE11bHdjQzNyZ0wzRzhwVjVuL1RLL3FBZGxvUjhwSVxuWlhPVDVKZ0lEOGtNOVY2RGdjcndTWVlOMnFUai9rT09ubkY2cTNyZFdLR29aNml1VmJJRzk4QkNEOG92U3N0M1xubGtCZXlreGliZHptWktNKy9FYnpMQy9PRTRMOFJBSCtFa3AwaDJrRU5lK1l2TTVlZGxOai9WdVF2aGdPT2dCVlxuQUxvdXdFb3BKcmNZMUl2Skg1VWpiV3JxNjlwRnR2TEhLZ1JYN0pBeFVRS0JnUUQ4cWZFZmlBRUw0Q3VkNXBXc1xuRmVYR3RZSlVwS2VpSXBSNFpLM240b2N4c2tMeDlqR00xMEVLSVFpcldsbmw1cnBjZkk2L1czYkxRTHI5OGN1Q1xuQzZZcjRDd3BFSEJoWU9RRHBUT3VhY1hHNEhwOTZTRktpazluYWRvYXhHVnZ2dzhraW5pVFhsN3lEM3NOVTFUSFxuaWI0UHFWMUM0aFJmRS9HaVN5LzFQZldhTFFLQmdRRHRHL3ZuK2RmRjJJWXNDV1dhdDJzbndVYXVoRBloSW9SNFxuTnlRTk81STJWbkdMZmNZQnAwOWxtTzBjR1B6UnBhNEIrUnI2THBmaGV0S3RiS1l6ak05YlppK0MvWjdZMVRvVlxuc21RcnlYNFhXd2c5UzZCeC9VUERtdHVZdC9HdzhCUDlUTURXRkdaeUFpWUxqdmVTTmlRdHg1b1VscWs0NWlHdlxuS2JaaHViUGhvd0tCZ0hRd3ludlBsWHVhbVRSQjU2NTlXMjluNVFsN3RzTXUxOHdOc0pPa2JydUIySnRndGlTb1xua0haUi9xU2VKaDA5WDVKTWpYQ2VaU0RQSWE3S1ZPWDI2WEhmNHk3M0tsYjlzWjJqaVFLNkRZT0prNHIzZktIRVxudlFNM2dGOHkxZHJ2cDgwTUNLcnNpUWtUNldpVlc3VnZPSUlIUnFZTlJZVDdyUEg2eVpFajd4LzVBb0dBUXN0bFxuVlY0ZW1NOThUSitCRGVxcHR4Tk5kQkF1cDNydjBtWEdOQ3daN2xDL3Y4bjRvN0tjUFVTdFZ3TDdCWndrdnMyTFxuK2ZweU1zVEU0TElBeC9qYzJTU2FNYzU4bHh6S05oNkE5WXpYaG9EUWUyUDRtT1A5MlBhZzhnNnZlV2JJV3N6cVxuYmVSbFQ2eW5SdzVKVTlrSXJCVFVwUVFrTzdFb3dBMkNJVm1OQVAwQ2dZQmNxZ3Noa09XVitWNE1RbUtaYVJ2T1xuS0NOcjdaQzhEUFduOTJOYjl2elZzVkU3YmYvZGdrQjRhaGliazJBNFBGbzZPMmdsUXZDdE1nVWhCS0VPQVc0bFxuN200V056eHRXS1Qwd1FXRjQ3Q0FKZEpBM0pNR0Y0czVKRkV3VlN2eHg1dG1iZXo3RWUxTG9uTE4vcFVxZk8vZVxuOXRxOHQvM0VTNnRjUVpUR0VNeTVZZz09XG4tLS0tLUVORCBQUklWQVRFIEtFWS0tLS0tXG4iLAogICJjbGllbnRfZW1haWwiOiAiZmlyZWJhc2UtYWRtaW5zZGstZmJzdmNAbmF2YWVsLmlhbS5nc2VydmljZWFjY291bnQuY29tIiwKICAiY2xpZW50X2lkIjogIjEwMjI2MTE3OTIwNzAwOTAxNzEwOCIsCiAgImF1dGhfdXJpIjogImh0dHBzOi8vYWNjb3VudHMuZ29vZ2xlLmNvbS9vL29hdXRoMi9hdXRoIiwKICAidG9rZW5fdXJpIjogImh0dHBzOi8vb2F1dGgyLmdvb2dsZWFwaXMuY29tL3Rva2VuIiwKICAiYXV0aF9wcm92aWRlcl94NTA5X2NlcnRfdXJsIjogImh0dHBzOi8vd3d3Lmdvb2dsZWFwaXMuY29tL29hdXRoMi92MS9jZXJ0cyIsCiAgImNsaWVudF94NTA5X2NlcnRfdXJsIjogImh0dHBzOi8vd3d3Lmdvb2dsZWFwaXMuY29tL3JvYm90L3YxL21ldGFkYXRhL3g1MDkvZmlyZWJhc2UtYWRtaW5zZGstZmJzdmMlNDBuYXZhZWwuaWFtLmdzZXJ2aWNlYWNjb3VudC5jb20iLAogICJ1bml2ZXJzZV9kb21haW4iOiAiZ29vZ2xlYXBpcy5jb20iCn0K"
+    valueFrom:
+      # Replace 'service-account-key-secret' with the actual name of your secret
+      # in Google Cloud Secret Manager that holds your base64-encoded service account key.
+      secret: service-account-key-secret
 
   # 2. GOOGLE_API_KEY for Genkit AI features (REQUIRED for Genkit)
-  # Replace "YOUR_ACTUAL_GOOGLE_API_KEY_HERE" with the key from Google AI Studio.
+  # This key was flagged by GitHub because its direct exposure is a security risk.
+  # DO NOT store its actual value directly in this file or any version control.
+  # Store it securely in Google Cloud Secret Manager and reference it here.
   - variable: GOOGLE_API_KEY
-    value: "AIzaSyANC2F_FhjAi7k0lKH4aflBCPPRxhJIdj8"
+    valueFrom:
+      # Replace 'genkit-google-api-key-secret' with the actual name of your secret
+      # in Google Cloud Secret Manager that holds your Google API key for Genkit.
+      secret: genkit-google-api-key-secret
 
   # 3. NEXT_PUBLIC_FIREBASE_ environment variables for client-side Firebase config
-  # These are crucial for prerendering during the build and for your client-side app.
+  # While the client-side API key (NEXT_PUBLIC_FIREBASE_API_KEY) is often
+  # considered less sensitive than a service account key, it's still best practice
+  # to keep it out of direct source code if possible, especially if it was
+  # previously flagged. Store it in Secret Manager for consistency.
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    value: "AIzaSyBKm9xhWBogV4Muk3d70rn6_-lo73T2irw"
+    valueFrom:
+      # Replace 'firebase-webapp-api-key-secret' with the actual name of your secret
+      # in Google Cloud Secret Manager that holds your client-side Firebase API key.
+      secret: firebase-webapp-api-key-secret
+
+  # The following client-side variables (authDomain, projectId, etc.) are generally
+  # not sensitive. They identify your Firebase project but don't grant access.
+  # Therefore, it's typically fine to keep them directly in this file for clarity
+  # and ease of configuration, especially for build-time operations like prerendering.
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
     value: "navael.firebaseapp.com"
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
