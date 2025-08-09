@@ -1,48 +1,22 @@
 "use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { FlaskConical, FileSearch, Download, Eye, CheckCircle, Edit, CheckSquare, ListChecks, Droplets, Activity, Microscope, ClipboardCheck, ServerCog, Archive, BookOpenCheck, PackagePlus, DollarSign, Printer, Loader2, AlertTriangle as AlertTriangleIcon } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { FlaskConical, FileSearch, Eye, DollarSign, Printer, Loader2, AlertTriangle as AlertTriangleIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import Link from "next/link";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Alert, AlertTitle, AlertDescription as ShadAlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/auth-context";
 import { ROLES } from "@/lib/constants";
-import { formatCurrency } from "@/lib/utils"; 
+import { formatCurrency } from "@/lib/utils";
 import { useAppearanceSettings } from "@/contexts/appearance-settings-context"; 
 import { useLabOrders } from "@/contexts/lab-order-context";
 import { format, parseISO } from "date-fns";
-
-export interface LabTest {
-  id?: string; // Optional for new tests
-  name: string;
-  price?: number; // Optional, can be derived
-  status: "Pending Sample" | "Processing" | "Results Ready" | "Cancelled"| "Sample Collected"| "Awaiting Verification"| "Result Entered";
-  result?: string;
-  referenceRange?: string;
-  unit?: string;
-  notes?: string;
-}
-export interface LabOrder {
-  id: string;
-  patientId: string;
-  patientName: string;
-  orderDate: string; // ISO string
-  orderingDoctor: string;
-  tests: LabTest[]; // Array of LabTest objects
-  status: "Pending Sample" | "Processing" | "Results Ready" | "Cancelled"| "Sample Collected"| "Awaiting Verification"| "Result Entered";
-  clinicalNotes?: string;
-  sampleCollectionDate?: string; // ISO string
-  sampleCollector?: string;
-  verificationDate?: string; // ISO string
-  verifiedBy?: string;
-  paymentStatus?: "Paid" | "Pending Payment" | "Partially Paid" | "Billed";
-  invoiceId?: string; // ID of the invoice if already billed
-}
+import type { LabTest, LabOrder, LabTestStatus, LabOrderStatus, LabOrderPaymentStatus } from "@/app/dashboard/lab/types";
 
 export const LAB_ORDERS_STORAGE_KEY = 'mockLabOrders';
 
@@ -72,6 +46,17 @@ export const paymentStatusBadgeVariant = (status?: LabOrder["paymentStatus"]): B
   }
 };
 
+// ======= SAFE DATE FORMAT HELPER =========
+function safeFormatDate(dateString: unknown, formatStr = "PPP"): string {
+  if (typeof dateString !== "string") return "N/A";
+  try {
+    const parsedDate = parseISO(dateString);
+    if (isNaN(parsedDate.getTime())) return "N/A";
+    return format(parsedDate, formatStr);
+  } catch {
+    return "N/A";
+  }
+}
 
 export const StatCard = ({ title, value, icon: Icon, description }: { title: string, value: string | number, icon: React.ElementType, description: string }) => (
     <Card className="shadow-md hover:shadow-lg transition-shadow">
@@ -87,31 +72,29 @@ export const StatCard = ({ title, value, icon: Icon, description }: { title: str
 );
 
 export default function LabResultsViewerPage() {
-  const { labOrders, isLoadingLabOrders, error: labOrdersError, fetchLabOrders } = useLabOrders();
+  const { labOrders, isLoadingLabOrders, error: labOrdersError } = useLabOrders();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedOrderForModal, setSelectedOrderForModal] = useState<LabOrder | null>(null);
   const { userRole } = useAuth();
   const { currency } = useAppearanceSettings();
 
   const completedReports = useMemo(() => {
-    return labOrders.filter(order =>
+    return labOrders.filter((order: LabOrder) =>
         (order.status === "Results Ready" || order.status === "Cancelled") &&
         (order.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
          order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
          order.orderingDoctor.toLowerCase().includes(searchTerm.toLowerCase()))
-    ).sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
+    ).sort((a: LabOrder, b: LabOrder) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
   }, [labOrders, searchTerm]);
-
 
   if (isLoadingLabOrders && labOrders.length === 0) {
     return (
       <div className="flex items-center justify-center p-10 min-h-[400px]">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" /> 
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
         <p className="ml-3 text-muted-foreground">Loading lab data...</p>
       </div>
     );
   }
-
 
   return (
     <div className="space-y-6">
@@ -136,7 +119,6 @@ export default function LabResultsViewerPage() {
           <AlertTitle>Error Fetching Lab Orders</AlertTitle>
           <ShadAlertDescription>
             {labOrdersError} Please try again.
-            <Button variant="link" onClick={() => fetchLabOrders()} className="p-0 h-auto ml-2">Retry</Button>
           </ShadAlertDescription>
         </Alert>
       )}
@@ -173,11 +155,19 @@ export default function LabResultsViewerPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {completedReports.map((order) => (
+                {completedReports.map((order: LabOrder) => (
                   <TableRow key={order.id}>
                     <TableCell>{order.id}</TableCell>
                     <TableCell>{order.patientName} (ID: {order.patientId})</TableCell>
-                    <TableCell>{order.verificationDate ? format(parseISO(order.verificationDate), "PPP") : (order.status === "Cancelled" && order.sampleCollectionDate ? format(parseISO(order.sampleCollectionDate), "PPP") : (order.status === "Cancelled" ? format(parseISO(order.orderDate), "PPP") : "N/A"))}</TableCell>
+                    <TableCell>
+                      {order.verificationDate
+                        ? safeFormatDate(order.verificationDate)
+                        : (order.status === "Cancelled" && order.sampleCollectionDate
+                            ? safeFormatDate(order.sampleCollectionDate)
+                            : (order.status === "Cancelled"
+                                ? safeFormatDate(order.orderDate)
+                                : "N/A"))}
+                    </TableCell>
                     <TableCell>
                         <Badge variant={paymentStatusBadgeVariant(order.paymentStatus)}>
                             <DollarSign className="mr-1 h-3 w-3"/>{order.paymentStatus || "N/A"}
@@ -204,8 +194,8 @@ export default function LabResultsViewerPage() {
                                     <DialogTitle className="font-headline text-xl">Lab Report Details - Order ID: {order.id}</DialogTitle>
                                     <DialogDescription>
                                         Patient: {order.patientName} (ID: {order.patientId}) <br />
-                                        Ordered By: {order.orderingDoctor} on {format(parseISO(order.orderDate), "PPP")} <br/>
-                                        Sample Collected: {order.sampleCollectionDate ? format(parseISO(order.sampleCollectionDate), "PPP p") : "N/A"}
+                                        Ordered By: {order.orderingDoctor} on {safeFormatDate(order.orderDate)} <br/>
+                                        Sample Collected: {order.sampleCollectionDate ? safeFormatDate(order.sampleCollectionDate, "PPP p") : "N/A"}
                                     </DialogDescription>
                                     <div className="text-sm text-muted-foreground mt-1">
                                         Payment: <Badge variant={paymentStatusBadgeVariant(order.paymentStatus)} className="ml-1">{order.paymentStatus || "N/A"}</Badge>
@@ -217,7 +207,7 @@ export default function LabResultsViewerPage() {
                                     </div>
                                     {order.verifiedBy && (
                                         <p className="text-sm text-muted-foreground mt-1">
-                                            Verified By: {order.verifiedBy} on {order.verificationDate ? format(parseISO(order.verificationDate), "PPP p") : "N/A"}
+                                            Verified By: {order.verifiedBy} on {order.verificationDate ? safeFormatDate(order.verificationDate, "PPP p") : "N/A"}
                                         </p>
                                     )}
                                 </DialogHeader>
@@ -234,7 +224,7 @@ export default function LabResultsViewerPage() {
                                         </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                        {order.tests.map(test => (
+                                        {order.tests.map((test: LabTest) => (
                                             <TableRow key={test.id}>
                                             <TableCell className="font-medium">{test.name}</TableCell>
                                             <TableCell>{test.result || "N/A"}</TableCell>
@@ -270,15 +260,3 @@ export default function LabResultsViewerPage() {
     </div>
   );
 }
-
-export let mockLabOrdersStore: LabOrder[] = [];
-export const addMockLabOrder = (newOrder: LabOrder) => { 
-    console.warn("addMockLabOrder from lab/page.tsx is deprecated. Use LabOrderContext.createLabOrder.");
-};
-export const updateMockLabOrder = (updatedOrder: LabOrder) => {
-     console.warn("updateMockLabOrder from lab/page.tsx is deprecated. Use LabOrderContext.updateLabOrder.");
-};
-export const getMockLabOrderById = (orderId: string): LabOrder | undefined => {
-     console.warn("getMockLabOrderById from lab/page.tsx is deprecated. Use LabOrderContext.fetchLabOrderById.");
-    return undefined; 
-};

@@ -26,9 +26,10 @@ import { usePatients, type Patient, type AugmentedPatient } from "@/contexts/pat
 import { format, parseISO, isFuture, isToday as checkIsTodayDate, formatDistanceToNow, isValid } from "date-fns";
 import { type Appointment, statusBadgeVariant as getAppointmentStatusVariant, paymentStatusBadgeVariant as getAppointmentPaymentStatusVariant } from '../../appointments/page';
 import { useAppointments } from "@/contexts/appointment-context";
-import { type LabOrder, getLabStatusVariant, paymentStatusBadgeVariant as getLabPaymentStatusBadgeVariant } from '../../lab/page';
-import { useLabOrders } from "@/contexts/lab-order-context";
-import { useConsultations, type Consultation } from "@/contexts/consultation-context";
+import {getLabStatusVariant, paymentStatusBadgeVariant as getLabPaymentStatusBadgeVariant } from '../../lab/page';
+import { useLabOrders } from "@/contexts/lab-order-context"; // Keep this import
+import { useConsultations } from "@/contexts/consultation-context";
+import { type Consultation } from '../../consultations/page';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -42,6 +43,7 @@ import type { Admission } from "../../admissions/page";
 import { type Prescription, prescriptionStatusVariant as getPrescriptionStatusVariant, paymentStatusBadgeVariant as getPrescriptionPaymentStatusVariant } from '../../pharmacy/page';
 import { usePharmacy } from "@/contexts/pharmacy-context";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu"; // Added for MAR actions
+import type { LabTest, LabOrder } from "@/app/dashboard/lab/types";
 
 const VITAL_SIGNS_STORAGE_KEY = 'navael_vital_signs';
 const ADMISSIONS_STORAGE_KEY = 'navael_admissions';
@@ -79,9 +81,6 @@ const DetailItem = ({ label, value, icon: Icon }: { label: string; value?: React
 };
 
 
-
-
-
 export default function PatientDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -95,8 +94,11 @@ export default function PatientDetailPage() {
   const { userRole, username: actorName, staffId: actorId } = useAuth();
   
   const { appointments: allSystemAppointments, isLoadingAppointments, getAppointmentsForPatient } = useAppointments();
+  // --- CHANGE STARTS HERE ---
+  // Changed fetchLabOrdersForPatientId to fetchLabOrdersForPatient as defined in your context
   const { labOrders: allSystemLabOrders, isLoadingLabOrders, fetchLabOrdersForPatient } = useLabOrders();
-  // CORRECTED: Changed fetchPrescriptionsForPatient to fetchPrescriptionsForPatientId
+  // --- CHANGE ENDS HERE ---
+
   const { prescriptions: allSystemPrescriptions, isLoadingPrescriptions, fetchPrescriptionsForPatientId } = usePharmacy();
   const { consultations: allSystemConsultations, isLoadingConsultations, fetchConsultationsForPatient } = useConsultations();
 
@@ -162,8 +164,6 @@ export default function PatientDetailPage() {
 
   
 
-
-
  useEffect(() => {
     let active = true;
 
@@ -190,12 +190,14 @@ export default function PatientDetailPage() {
             if (!newPatientData) {
                 toast({ title: "Patient Not Found", description: `Could not find patient with ID ${patientId}.`, variant: "destructive" });
             } else {
-                // CORRECTED: Changed fetchPrescriptionsForPatient to fetchPrescriptionsForPatientId
+                // --- CHANGE STARTS HERE ---
+                // Changed fetchLabOrdersForPatientId to fetchLabOrdersForPatient
                 const [orders, rxs, consults, apps] = await Promise.all([
-                    fetchLabOrdersForPatient(patientId).then(data => active ? data : []),
-                    fetchPrescriptionsForPatientId(patientId).then(data => active ? data : []), // <--- Applied correction here
-                    fetchConsultationsForPatient(patientId).then(data => active ? data.sort((a,b) => new Date(b.consultationDate).getTime() - new Date(a.consultationDate).getTime()).slice(0,3) : []),
-                    getAppointmentsForPatient(patientId).then(data => {
+                    fetchLabOrdersForPatient(patientId).then((data: LabOrder[]) => active ? data : []),
+                    // --- CHANGE ENDS HERE ---
+                    fetchPrescriptionsForPatientId(patientId).then((data: Prescription[]) => active ? data : []),
+                    fetchConsultationsForPatient(patientId).then((data: Consultation[]) => active ? data.sort((a,b) => new Date(b.consultationDate).getTime() - new Date(a.consultationDate).getTime()).slice(0,3) : []),
+                    getAppointmentsForPatient(patientId).then((data: Appointment[]) => {
                         if (!active) return [];
                         const today = new Date(); today.setHours(0,0,0,0);
                         return data.filter(app => (isFuture(parseISO(app.date)) || checkIsTodayDate(parseISO(app.date))) && (app.status === "Scheduled" || app.status === "Confirmed" || app.status === "Arrived"))
@@ -231,9 +233,11 @@ export default function PatientDetailPage() {
       patientId, 
       getPatientById, 
       isLoadingPatientsContext, 
+      // --- CHANGE STARTS HERE ---
+      // Changed fetchLabOrdersForPatientId to fetchLabOrdersForPatient in dependency array
       fetchLabOrdersForPatient, 
-      // CORRECTED: Changed fetchPrescriptionsForPatient to fetchPrescriptionsForPatientId
-      fetchPrescriptionsForPatientId, // <--- Applied correction here in dependencies
+      // --- CHANGE ENDS HERE ---
+      fetchPrescriptionsForPatientId, 
       fetchConsultationsForPatient, 
       getAppointmentsForPatient, 
       toast
@@ -280,7 +284,7 @@ export default function PatientDetailPage() {
       (log.actionDescription && log.actionDescription.toLowerCase().includes(patient.name.toLowerCase())) ||
       (log.details && log.details.toLowerCase().includes(patient.name.toLowerCase())) ||
       (log.details && log.details.toLowerCase().includes(patient.id.toLowerCase()))
-    ))}// (log.actionDescription && log.actionDescription.toLowerCase().includes(patient.name.toLowerCase())) || (log.details && log.details.toLowerCase().includes(patient.name.toLowerCase())) || (log.details && log.details.toLowerCase().includes(patient.id.toLowerCase()))).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+    ))}// (log.actionDescription && log.actionDescription.toLowerCase().includes(patient.name.toLowerCase())) || (log.details && log.details.toLowerCase().includes(patient.name.toLowerCase())) || (log.details && log.details.toLowerCase().includes(patient.id.toLowerCase()))).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       
       const currentAdmission = allSystemAdmissions.find(adm => adm.patientId === patient.id && (adm.status === "Admitted" || adm.status === "Observation"));
       setActiveAdmission(currentAdmission || null);

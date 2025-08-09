@@ -495,7 +495,7 @@ const updatePatient = useCallback(async (
     </PatientContext.Provider>
   );
 }
-
+console.log("Patient context module loaded");
 export function usePatients() {
   const context = useContext(PatientContext);
   if (context === undefined) {

@@ -20,7 +20,6 @@ import {
   updateDoc,
   query,
   where,
-  Timestamp,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
@@ -38,9 +37,9 @@ interface AppointmentContextType {
 
 const AppointmentContext = createContext<AppointmentContextType | undefined>(undefined);
 
-// ---------- Firebase Firestore Functions -----------
-
 const APPOINTMENTS_COLLECTION = "appointments";
+
+// ---------- Firestore Helper Functions ----------
 
 async function fetchAppointmentsFromFirestore(): Promise<Appointment[]> {
   const snapshot = await getDocs(collection(db, APPOINTMENTS_COLLECTION));
@@ -71,7 +70,7 @@ async function fetchAppointmentsForPatientFromFirestore(patientId: string): Prom
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment));
 }
 
-// ---------- React Context Logic -------------
+// ---------- Context Provider ----------
 
 export function AppointmentProvider({ children }: { children: ReactNode }) {
   const [appointmentsState, setAppointmentsState] = useState<Appointment[]>([]);
@@ -84,10 +83,12 @@ export function AppointmentProvider({ children }: { children: ReactNode }) {
     setErrorState(null);
     try {
       const appointments = await fetchAppointmentsFromFirestore();
-      setAppointmentsState(appointments.sort((a, b) =>
-        new Date(b.date).getTime() - new Date(a.date).getTime() ||
-        a.time.localeCompare(b.time)
-      ));
+      setAppointmentsState(
+        appointments.sort((a, b) =>
+          new Date(b.date).getTime() - new Date(a.date).getTime() ||
+          a.time.localeCompare(b.time)
+        )
+      );
     } catch (error: any) {
       setErrorState(error.message || "Failed to fetch appointments.");
     } finally {

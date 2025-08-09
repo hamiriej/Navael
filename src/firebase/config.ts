@@ -10,12 +10,12 @@ import { getFirestore } from 'firebase/firestore';
 
 // Your Firebase project configuration
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY", // Make sure you've replaced this!
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyBKm9xhWBogV4Muk3d70rn6_-lo73T2irw",
+  authDomain: "navael.firebaseapp.com",
+  projectId: "navael",
+  storageBucket: "navael.firebasestorage.app",
+  messagingSenderId: "36160001734",
+  appId: "1:36160001734:web:ee096485297757ec1c29c7"
 };
 
 // Initialize Firebase

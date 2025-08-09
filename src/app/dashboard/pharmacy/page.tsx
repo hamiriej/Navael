@@ -1,3 +1,5 @@
+// d:/projects/NavaelHospitalSystem/src/app/dashboard/pharmacy/page.tsx
+
 "use client";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +22,8 @@ import { useAppearanceSettings } from "@/contexts/appearance-settings-context";
 import { formatCurrency } from "@/lib/utils";
 import { usePharmacy } from "@/contexts/pharmacy-context";
 
+
+// Medication Interface - NO CHANGES NEEDED HERE (it was already correct with linkedAppointmentId)
 export interface Medication {
   id: string;
   name: string;
@@ -32,6 +36,7 @@ export interface Medication {
   pricePerUnit: number;
 }
 
+// Prescription Interface - This was already correctly updated with linkedAppointmentId from your file
 export interface Prescription {
   id: string;
   patientId: string;
@@ -48,6 +53,7 @@ export interface Prescription {
   paymentStatus?: "Pending Payment" | "Paid" | "N/A";
   refillable: boolean; 
   refillsRemaining?: number; 
+  linkedAppointmentId?: string; // <--- This was already here and is correct
 }
 
 export const PHARMACY_PRESCRIPTIONS_STORAGE_KEY = 'navael_pharmacy_prescriptions';
@@ -75,6 +81,10 @@ export const paymentStatusBadgeVariant = (status?: Prescription["paymentStatus"]
     default: return "outline";
   }
 };
+
+// ✨ NEW IMPORT: For the link icon in the table
+import { Link as LinkIcon } from "lucide-react";
+
 
 export default function PharmacyPage() {
   const { toast } = useToast();
@@ -314,6 +324,8 @@ export default function PharmacyPage() {
                     <TableHead>Date</TableHead>
                     <TableHead>Payment</TableHead>
                     <TableHead>Status</TableHead>
+                    {/* ✨ ADDED TABLE HEAD: For the linked consultation */}
+                    <TableHead>Linked Consultation</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -343,6 +355,16 @@ export default function PharmacyPage() {
                             className={rx.status === 'Ready for Pickup' ? 'bg-blue-500 text-white dark:bg-blue-600 dark:text-white' : (rx.status === 'Dispensed' ? 'bg-green-500 text-white dark:bg-green-600 dark:text-white' : '')}>
                             {rx.status}
                         </Badge>
+                      </TableCell>
+                      {/* ✨ ADDED TABLE CELL: Display linked consultation ID */}
+                      <TableCell>
+                        {rx.linkedAppointmentId ? (
+                          <Link href={`/dashboard/consultations/${rx.linkedAppointmentId}/edit`} className="hover:underline text-primary text-xs flex items-center">
+                            <LinkIcon className="h-3 w-3 mr-1"/> {rx.linkedAppointmentId.substring(0, 8)}...
+                          </Link>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">N/A</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <Dialog>

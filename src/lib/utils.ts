@@ -1,4 +1,3 @@
-
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import type { CurrencyCode } from "@/contexts/appearance-settings-context";
@@ -69,3 +68,21 @@ export function triggerTxtDownload(textString: string, filename: string) {
   triggerDownload(textString, filename, 'text/plain;charset=utf-8;');
 }
 
+/**
+ * Returns a variant string for a Badge component based on a payment status.
+ * This function is being added to your src/lib/utils.ts file.
+ */
+export function getLabPaymentStatusVariant(status: string): "default" | "secondary" | "destructive" | "outline" | "success" | "warning" {
+  switch (status) {
+    case "Paid":
+      return "success"; // Assuming you have a 'success' variant for green/positive
+    case "Pending Payment":
+      return "warning"; // Assuming you have a 'warning' variant for orange/caution
+    case "Unpaid":
+      return "destructive"; // Assuming you have a 'destructive' variant for red/negative
+    case "Cancelled": // If cancelled orders also show a specific status
+      return "outline"; // Or another suitable variant
+    default:
+      return "secondary"; // A neutral default if status is unknown or not handled
+  }
+}

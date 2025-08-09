@@ -1,3 +1,4 @@
+// d:/projects/NavaelHospitalSystem/src/app/login/page.tsx
 
 "use client";
 
@@ -92,6 +93,7 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {/* This usage of <Form {...form}> is the pattern */}
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <FormField

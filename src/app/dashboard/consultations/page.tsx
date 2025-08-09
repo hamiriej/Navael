@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import Link from "next/link";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useConsultations } from "@/contexts/consultation-context";
 import { format, parseISO } from "date-fns";
 
@@ -16,7 +16,7 @@ export interface Consultation {
   id: string;
   patientId: string;
   patientName: string;
-  consultationDate: string;
+  consultationDate: string; // ISO string
   doctorName: string;
   presentingComplaint: string;
   historyOfPresentingComplaint?: string;
@@ -33,9 +33,10 @@ export interface Consultation {
   status: "Open" | "Closed" | "Follow-up Required";
   time?: string;
   reason?: string;
+  createdAt: string;
+  updatedAt: string;
+  linkedAppointmentId?: string;
 }
-
-export const CONSULTATIONS_STORAGE_KEY = 'navael_consultations';
 
 const statusBadgeVariant = (status: Consultation["status"]): BadgeProps["variant"] => {
   switch (status) {
@@ -47,17 +48,18 @@ const statusBadgeVariant = (status: Consultation["status"]): BadgeProps["variant
 };
 
 export default function ConsultationsPage() {
-  const { consultations, isLoadingConsultations, fetchConsultations } = useConsultations();
+  const { consultations, isLoadingConsultations } = useConsultations();
   const [searchTerm, setSearchTerm] = useState("");
 
   const filteredConsultations = useMemo(() => {
-    return consultations.filter(consult =>
-      consult.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      consult.doctorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (consult.consultationDate && format(parseISO(consult.consultationDate), "PPP").toLowerCase().includes(searchTerm.toLowerCase()))
-    ).sort((a, b) => new Date(b.consultationDate).getTime() - new Date(a.consultationDate).getTime());
+    return consultations
+      .filter((consult: Consultation) =>
+        consult.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        consult.doctorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (consult.consultationDate && format(parseISO(consult.consultationDate), "PPP").toLowerCase().includes(searchTerm.toLowerCase()))
+      )
+      .sort((a: Consultation, b: Consultation) => new Date(b.consultationDate).getTime() - new Date(a.consultationDate).getTime());
   }, [consultations, searchTerm]);
-
 
   if (isLoadingConsultations && consultations.length === 0) {
     return (
@@ -77,11 +79,7 @@ export default function ConsultationsPage() {
           </h1>
           <p className="text-muted-foreground">View and manage patient consultation records.</p>
         </div>
-         <Button variant="outline" asChild>
-          <Link href="/dashboard/consultations/new">
-            <FileEdit className="mr-2 h-4 w-4" /> Start New Consultation Note
-          </Link>
-        </Button>
+        {/* Consultations must be initiated from an appointment, so no direct "New" button */}
       </div>
 
       <Card className="shadow-lg">
@@ -98,10 +96,10 @@ export default function ConsultationsPage() {
         </CardHeader>
         <CardContent>
           {isLoadingConsultations && filteredConsultations.length === 0 ? (
-             <div className="flex items-center justify-center min-h-[300px]">
-                <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                <p className="ml-3 text-muted-foreground">Filtering consultations...</p>
-             </div>
+            <div className="flex items-center justify-center min-h-[300px]">
+              <Loader2 className="h-12 w-12 animate-spin text-primary" />
+              <p className="ml-3 text-muted-foreground">Filtering consultations...</p>
+            </div>
           ) : filteredConsultations.length > 0 ? (
             <Table>
               <TableHeader>
@@ -115,25 +113,36 @@ export default function ConsultationsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredConsultations.map((consult) => (
+                {filteredConsultations.map((consult: Consultation) => (
                   <TableRow key={consult.id}>
                     <TableCell className="font-medium">
-                       <Link href={`/dashboard/patients/${consult.patientId}`} className="hover:underline text-primary">
+                      <Link href={`/dashboard/patients/${consult.patientId}`} className="hover:underline text-primary">
                         {consult.patientName}
                       </Link>
                     </TableCell>
                     <TableCell>{consult.doctorName}</TableCell>
                     <TableCell>{format(parseISO(consult.consultationDate), "PPP p")}</TableCell>
-                    <TableCell>{consult.reason || consult.presentingComplaint.substring(0,50) + (consult.presentingComplaint.length > 50 ? "..." : "")}</TableCell>
-                    <TableCell><Badge variant={statusBadgeVariant(consult.status)}>{consult.status}</Badge></TableCell>
+                    <TableCell>
+                      {consult.reason ||
+                        (consult.presentingComplaint.length > 50
+                          ? consult.presentingComplaint.substring(0, 50) + "..."
+                          : consult.presentingComplaint)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={statusBadgeVariant(consult.status)}>{consult.status}</Badge>
+                    </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem asChild>
-                             <Link href={`/dashboard/consultations/${consult.id}/edit`}>
-                                <Eye className="mr-2 h-4 w-4"/>View/Edit Note
-                             </Link>
+                            <Link href={`/dashboard/consultations/${consult.id}/edit`}>
+                              <Eye className="mr-2 h-4 w-4" /> View/Edit Note
+                            </Link>
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -147,8 +156,13 @@ export default function ConsultationsPage() {
               <MessageSquareText className="h-24 w-24 text-muted-foreground/50 mb-4" />
               <p className="text-lg text-muted-foreground">No Consultation Records Found</p>
               <p className="text-sm text-muted-foreground">
-                {searchTerm ? "Try adjusting your search terms." : "Start a new consultation note to see records here."}
+                {searchTerm
+                  ? "Try adjusting your search terms."
+                  : "Consultations must now be initiated from an existing appointment."}
               </p>
+              <Link href="/dashboard/appointments" className="mt-4">
+                <Button variant="outline">Go to Appointments to Start a Consultation</Button>
+              </Link>
             </div>
           )}
         </CardContent>

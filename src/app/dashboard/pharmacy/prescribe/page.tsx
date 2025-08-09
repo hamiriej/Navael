@@ -13,10 +13,13 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+// ✨ FIX START: Corrected import path from 'auth-auth-context' to 'auth-context'
 import { useAuth } from "@/contexts/auth-context";
+// ✨ FIX END
 import { Separator } from "@/components/ui/separator";
-import { usePatients, type Patient, type AugmentedPatient } from "@/contexts/patient-context";import { type Medication, type Prescription } from "../page";
-import { type Invoice } from "../../billing/page";
+import { usePatients, type Patient, type AugmentedPatient } from "@/contexts/patient-context";
+import { type Medication, type Prescription } from "../page"; // Adjusted import path for types
+import { type Invoice } from '@/contexts/invoice-context'; // Corrected import
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { logActivity } from "@/lib/activityLog";
@@ -25,6 +28,7 @@ import { formatCurrency } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { usePharmacy } from "@/contexts/pharmacy-context";
 import { useInvoices } from "@/contexts/invoice-context";
+
 
 const prescribedItemSchema = z.object({
   medicationId: z.string().min(1, "Medication must be selected"),
@@ -75,6 +79,8 @@ export default function PrescribeMedicationPage() {
   const [selectedMedicationForConfig, setSelectedMedicationForConfig] = useState<Medication | null>(null);
 
   const patientIdFromQuery = searchParams.get("patientId");
+  // Retrieve appointmentId from query parameter
+  const appointmentIdFromQuery = searchParams.get("appointmentId");
 
   const form = useForm<PrescribeMedicationFormValues>({
     resolver: zodResolver(prescribeMedicationSchema),
@@ -134,7 +140,7 @@ export default function PrescribeMedicationPage() {
     fetchAndSetPatient();
 
     return () => { isActive = false; };
-  }, [patientIdFromQuery, isLoadingPatients, getPatientById, toast, lockedPatientState]); // Added lockedPatientState as it's read
+  }, [patientIdFromQuery, isLoadingPatients, getPatientById, toast, lockedPatientState]);
 
   // Effect to populate form when `lockedPatientState` or `loggedInDoctorName` changes
   useEffect(() => {
@@ -153,7 +159,7 @@ export default function PrescribeMedicationPage() {
          form.setValue("pastMedicalHistory", lockedPatientState.medicalHistoryNotes || "", { shouldValidate: true });
       }
       if (form.getValues("allergies") !== (lockedPatientState.allergies?.join(', ') || "")) {
-        form.setValue("allergies", lockedPatientState.allergies?.join(', ') || "", { shouldValidate: true });
+        form.setValue("allergies", lockedPatientState.allergies?.join(', ') || "");
       }
       // Clear prescribedItems only if the patient ID truly changes.
       if (form.getValues("selectedPatient")?.id !== lockedPatientState.id && fields.length > 0) {
@@ -179,7 +185,7 @@ export default function PrescribeMedicationPage() {
         });
       }
     }
-  }, [lockedPatientState, loggedInDoctorName, form, patientIdFromQuery, fields.length]); // Added fields.length
+  }, [lockedPatientState, loggedInDoctorName, form, patientIdFromQuery, fields.length]);
 
 
   const filteredInventory = useMemo(() => {
@@ -260,7 +266,10 @@ export default function PrescribeMedicationPage() {
         return;
     }
     if (!values.prescribedItems || values.prescribedItems.length === 0) {
+        // This toast already handles the main error for empty prescribedItems
         toast({ title: "No Medications Added", description: "Please add at least one medication to the prescription list.", variant: "destructive"});
+        // Also set the form error to trigger the UI message
+        form.setError("prescribedItems", { type: "manual", message: "At least one medication must be added." });
         return;
     }
 
@@ -328,6 +337,8 @@ export default function PrescribeMedicationPage() {
           paymentStatus: totalInvoiceAmount > 0 ? "Pending Payment" : "N/A",
           refillable: item.isRefillable || false,
           refillsRemaining: item.isRefillable ? (item.refillsRemaining || 0) : undefined,
+          // FIX: Change property name to linkedAppointmentId
+          linkedAppointmentId: appointmentIdFromQuery || undefined, // Will be undefined if not present in URL
       };
       try {
         await addPrescription(prescriptionData);
@@ -403,6 +414,13 @@ export default function PrescribeMedicationPage() {
             <CardDescription>
             {currentPatientForDisplay ? `Creating prescription for patient ID: ${currentPatientForDisplay.id}` : "Select patient, search for medications, and add them to the prescription list."}
             An invoice will be automatically generated for all prescribed medications (in {currency}).
+            {/* Display the linked consultation ID if present */}
+            {appointmentIdFromQuery && (
+                <p className="text-xs text-muted-foreground mt-1">
+                    <Info className="inline-block h-3 w-3 mr-1 align-text-bottom" />
+                    Linked to Consultation ID: {appointmentIdFromQuery}
+                </p>
+            )}
             </CardDescription>
         </CardHeader>
         <CardContent>
@@ -442,9 +460,12 @@ export default function PrescribeMedicationPage() {
                     <h3 className="text-lg font-semibold font-headline text-primary flex items-center"><Pill className="mr-2 h-5 w-5"/>Add Medication to Prescription</h3>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                        <FormItem>
-                            <FormLabel>Search Medication from Inventory</FormLabel>
-                            <div className="relative">
+                        {/* CORRECTED BLOCK: Using standard HTML label and div for medicationSearchTerm input */}
+                        <div>
+                            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                Search Medication from Inventory
+                            </label>
+                            <div className="relative mt-1">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     placeholder="Search by name or category..."
@@ -453,7 +474,9 @@ export default function PrescribeMedicationPage() {
                                     className="pl-10"
                                 />
                             </div>
-                        </FormItem>
+                        </div>
+                        {/* END CORRECTED BLOCK */}
+
                         <FormField
                             control={form.control}
                             name="currentMedicationSelection"
@@ -484,7 +507,7 @@ export default function PrescribeMedicationPage() {
 
                     {selectedMedicationForConfig && (
                         <Card className="p-3 bg-muted/30">
-                            <p className="text-sm font-medium">{selectedMedicationForConfig.name} ({selectedMedicationForConfig.dosage})</p>
+                            <p className="text-sm font-medium">{selectedMedicationForConfig.name} <span className="text-sm text-muted-foreground">({selectedMedicationForConfig.dosage})</span></p>
                             <p className={`text-xs ${selectedMedicationForConfig.status === 'Out of Stock' ? 'text-destructive' : selectedMedicationForConfig.status === 'Low Stock' ? 'text-orange-600' : 'text-green-600'}`}>
                                 Status: {selectedMedicationForConfig.status} (Current Stock: {selectedMedicationForConfig.stock}, Price/Unit: {formatCurrency(selectedMedicationForConfig.pricePerUnit, currency)})
                             </p>
@@ -563,7 +586,13 @@ export default function PrescribeMedicationPage() {
                                 )}
                             </Card>
                         ))}
-                        <FormMessage>{form.formState.errors.prescribedItems?.message || form.formState.errors.prescribedItems?.root?.message}</FormMessage>
+                        {/* CORRECTED BLOCK: Displaying array error message directly */}
+                        { (form.formState.errors.prescribedItems && (form.formState.errors.prescribedItems.message || form.formState.errors.prescribedItems.root?.message)) && (
+                            <p className="text-sm font-medium text-destructive mt-2">
+                                {form.formState.errors.prescribedItems.message || form.formState.errors.prescribedItems.root?.message}
+                            </p>
+                        )}
+                        {/* END CORRECTED BLOCK */}
                     </div>
                 </div>
 

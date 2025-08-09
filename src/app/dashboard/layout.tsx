@@ -131,7 +131,7 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen w-full">
-      <Sidebar collapsible="icon" variant="sidebar" side="left" className="border-r hidden md:flex">
+      <Sidebar collapsible="icon" variant="sidebar" side="left" className="border-r hidden md:flex w-60">
         <AppSidebarContent />
       </Sidebar>
       <div className="flex flex-1 flex-col">
@@ -143,7 +143,7 @@ function DashboardLayoutContent({ children }: { children: ReactNode }) {
                 <span className="sr-only">Toggle navigation menu</span>
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="flex flex-col p-0 max-w-xs">
+            <SheetContent side="left" className="flex flex-col p-0 w-60">
               <SheetHeader className="p-4 border-b sr-only"><SheetTitle>Navigation Menu</SheetTitle></SheetHeader>
               <AppSidebarContent />
             </SheetContent>

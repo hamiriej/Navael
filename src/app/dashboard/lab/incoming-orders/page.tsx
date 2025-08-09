@@ -1,3 +1,5 @@
+// d:/projects/NavaelHospitalSystem/src/app/dashboard/lab/order/page.tsx
+
 "use client";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +11,10 @@ import Link from "next/link";
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import { type LabOrder, getLabStatusVariant, paymentStatusBadgeVariant } from "../page";
+// Note: Assuming LabOrder type and getLabStatusVariant/paymentStatusBadgeVariant are imported correctly from "../page"
+import { getLabStatusVariant, paymentStatusBadgeVariant } from "../page";
+import type { LabTest, LabOrder } from "@/app/dashboard/lab/types";
+
 import { Input } from "@/components/ui/input";
 import { useLabOrders } from "@/contexts/lab-order-context";
 import { Loader2 } from "lucide-react";
@@ -26,6 +31,11 @@ export default function IncomingLabOrdersPage() {
   const { userRole, username } = useAuth();
 
   const incomingOrders = useMemo(() => {
+    // Add a check to ensure labOrders is an array before filtering
+    if (!Array.isArray(labOrders)) {
+      console.warn("labOrders is not an array:", labOrders);
+      return [];
+    }
     return labOrders.filter(order => order.status === "Pending Sample")
       .sort((a,b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
   }, [labOrders]);
@@ -34,50 +44,83 @@ export default function IncomingLabOrdersPage() {
   const handleAcknowledgeOrder = async (orderId: string) => {
     setActionLoading(prev => ({...prev, [orderId]: true}));
     const orderToUpdate = labOrders.find(o => o.id === orderId);
-    if (orderToUpdate) {
-      if (orderToUpdate.paymentStatus !== "Paid") {
-        toast({
-          title: "Payment Pending",
-          description: `Payment for order ${orderId} is still pending. Sample collection may proceed, but results release will require payment.`,
-          variant: "default",
-          duration: 7000,
-        });
-      }
-      
-      try {
-        const updatedOrder = await updateLabOrder(orderId, {
-            status: "Sample Collected",
-            sampleCollectionDate: new Date().toISOString(),
-        });
-        if (updatedOrder) {
-            logActivity({
-                actorRole: userRole || "System",
-                actorName: username || "System",
-                actionDescription: `Acknowledged Lab Order ${orderId} for ${updatedOrder.patientName}. Status set to Sample Collected.`,
-                targetEntityType: "Lab Order",
-                targetEntityId: orderId,
-                iconName: "CheckCircle",
-            });
-            toast({
-                title: "Order Acknowledged",
-                description: `Order ${orderId} status updated to "Sample Collected". It will now appear in the Sample Collection queue on the main lab dashboard.`,
-            });
-        }
-      } catch (error) {
-        console.error("Error acknowledging order via context:", error);
-        toast({ title: "Acknowledgement Error", description: "Could not update order status.", variant: "destructive"});
-      }
+
+    if (!orderToUpdate) {
+      toast({ title: "Error", description: "Order not found.", variant: "destructive" });
+      setActionLoading(prev => ({...prev, [orderId]: false}));
+      return;
     }
-    setActionLoading(prev => ({...prev, [orderId]: false}));
+
+    // --- NEW: Blocking logic based on paymentStatus ---
+    if (orderToUpdate.paymentStatus !== "Paid") {
+      toast({
+        title: "Payment Required",
+        description: `Payment for order ${orderId} must be "Paid" before it can be acknowledged. Current status: ${orderToUpdate.paymentStatus || "N/A"}.`,
+        variant: "destructive", // Use destructive for a blocking message
+        duration: 7000,
+      });
+      setActionLoading(prev => ({...prev, [orderId]: false}));
+      return; // Crucially, stop the function here if payment isn't "Paid"
+    }
+    // --- END NEW Blocking logic ---
+    
+    // If we reach here, paymentStatus is "Paid", so proceed with acknowledgment
+    try {
+      const updatedOrder = await updateLabOrder(orderId, {
+          status: "Sample Collected",
+          sampleCollectionDate: new Date().toISOString(),
+      });
+      if (updatedOrder) {
+          logActivity({
+              actorRole: userRole || "System",
+              actorName: username || "System",
+              actionDescription: `Acknowledged Lab Order ${orderId} for ${updatedOrder.patientName}. Status set to Sample Collected.`,
+              targetEntityType: "Lab Order",
+              targetEntityId: orderId,
+              iconName: "CheckCircle",
+          });
+          toast({
+              title: "Order Acknowledged",
+              description: `Order ${orderId} status updated to "Sample Collected". It will now appear in the Sample Collection queue on the main lab dashboard.`,
+          });
+      }
+    } catch (error) {
+      console.error("Error acknowledging order via context:", error);
+      toast({ title: "Acknowledgement Error", description: "Could not update order status.", variant: "destructive"});
+    } finally {
+      setActionLoading(prev => ({...prev, [orderId]: false}));
+    }
   };
 
   const filteredOrders = useMemo(() => {
-    return incomingOrders.filter(order =>
-      order.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.orderingDoctor.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [incomingOrders, searchTerm]);
+    // Add a check to ensure incomingOrders is an array before filtering
+    if (!Array.isArray(incomingOrders)) {
+      console.warn("incomingOrders is not an array:", incomingOrders);
+      return [];
+    }
+
+    const lowerCaseSearchTerm = searchTerm.toLowerCase(); // Pre-calculate for efficiency
+
+    return incomingOrders.filter(order => {
+      // Apply optional chaining and nullish coalescing to each property
+      const patientName = (order.patientName ?? "").toLowerCase();
+      const orderId = (order.id ?? "").toLowerCase();
+      const orderingDoctor = (order.orderingDoctor ?? "").toLowerCase();
+
+      return patientName.includes(lowerCaseSearchTerm) ||
+             orderId.includes(lowerCaseSearchTerm) ||
+             orderingDoctor.includes(lowerCaseSearchTerm);
+    });
+  }, [incomingOrders, searchTerm]); // Dependencies remain the same
+
+  // --- NEW: Add this console.log for debugging paymentStatus ---
+  useEffect(() => {
+    console.log("Current filteredOrders in IncomingLabOrdersPage (for debugging payment status):", filteredOrders);
+    filteredOrders.forEach(order => {
+        console.log(`Order ID: ${order.id}, Current Lab Status: ${order.status}, Payment Status: ${order.paymentStatus}`);
+    });
+  }, [filteredOrders]); // Log whenever filteredOrders changes
+  // --- END NEW console.log ---
 
   if (isLoadingLabOrders && incomingOrders.length === 0) {
     return (
@@ -146,7 +189,11 @@ export default function IncomingLabOrdersPage() {
                         {order.patientName}
                       </Link>
                     </TableCell>
-                    <TableCell>{format(parseISO(order.orderDate), "PPP")}</TableCell>
+<TableCell>
+  {typeof order.orderDate === "string" && order.orderDate
+    ? format(parseISO(order.orderDate), "PPP")
+    : "Invalid date"}
+</TableCell>
                     <TableCell>{order.tests.map(t => t.name).join(', ')}</TableCell>
                     <TableCell>
                         <Badge variant={paymentStatusBadgeVariant(order.paymentStatus)}>

@@ -1,3 +1,5 @@
+// src/components/ui/form.tsx
+
 "use client"
 
 import * as React from "react"
@@ -5,16 +7,20 @@ import * as LabelPrimitive from "@radix-ui/react-label"
 import { Slot } from "@radix-ui/react-slot"
 import {
   Controller,
-  FormProvider,
+  FormProvider, // This is the key: directly importing FormProvider
   useFormContext,
   type ControllerProps,
   type FieldPath,
   type FieldValues,
 } from "react-hook-form"
 
-import { cn } from "@/lib/utils"
-import { Label } from "@/components/ui/label"
+import { cn } from "@/lib/utils" // Assuming your utility function for class names
+import { Label } from "@/components/ui/label" // Assuming your Label component
 
+// This is the core definition that makes your setup work:
+// Your custom 'Form' component is directly aliased to react-hook-form's 'FormProvider'.
+// When you use <Form {...formInstance}>, it implicitly passes all properties
+// of 'formInstance' directly to 'FormProvider'.
 const Form = FormProvider
 
 type FormFieldContextValue<
@@ -44,13 +50,23 @@ const FormField = <
 const useFormField = () => {
   const fieldContext = React.useContext(FormFieldContext)
   const itemContext = React.useContext(FormItemContext)
+  // useFormContext() will now find the context correctly because
+  // 'Form' (which is FormProvider) received {...formInstance}
   const { getFieldState, formState } = useFormContext()
+
+  // Ensure fieldContext is available before using it
+  // This check was added previously for robustness
+  if (!fieldContext || !fieldContext.name) {
+    throw new Error("useFormField should be used within <FormField>")
+  }
+  // Ensure itemContext is available before using it
+  // This check was added previously for robustness
+  if (!itemContext) {
+    throw new Error("useFormField should be used within <FormItem>");
+  }
 
   const fieldState = getFieldState(fieldContext.name, formState)
 
-  if (!fieldContext) {
-    throw new Error("useFormField should be used within <FormField>")
-  }
 
   const { id } = itemContext
 
@@ -68,6 +84,7 @@ type FormItemContextValue = {
   id: string
 }
 
+// Moved FormItemContext definition above its usage in useFormField for clarity
 const FormItemContext = React.createContext<FormItemContextValue>(
   {} as FormItemContextValue
 )

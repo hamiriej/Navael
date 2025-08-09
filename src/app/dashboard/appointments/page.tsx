@@ -2,33 +2,41 @@
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarDays, Lightbulb, NotebookPen, MoreHorizontal, Clock, UserCircle, Tag, Eye, Edit, Trash2, CheckCircle, DollarSign, Printer, CheckSquare, Loader2, AlertTriangle as AlertTriangleIcon } from "lucide-react";
-import Link from "next/link";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { useAuth } from "@/contexts/auth-context";
-import { ROLES } from "@/lib/constants";
-import { useState, useMemo, useEffect } from "react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Alert, AlertTitle, AlertDescription as ShadAlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Form } from "@/components/ui/form";
+import { CalendarDays, Lightbulb, NotebookPen, MoreHorizontal, Clock, UserCircle, Tag, Eye, Edit, Trash2, CheckCircle, DollarSign, Printer, CheckSquare, Loader2, AlertTriangle as AlertTriangleIcon, XCircle, Search } from "lucide-react";
+import Link from "next/link";
+import { useState, useEffect, useMemo } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO, isBefore } from "date-fns";
-import { usePatients } from "@/contexts/patient-context";
+import { useAuth } from "@/contexts/auth-context";
+import { cn } from "@/lib/utils";
+import { logActivity } from "@/lib/activityLog";
 import { useAppointments } from "@/contexts/appointment-context";
-import { AlertDialogTrigger } from "@/components/ui/alert-dialog"; // Or wherever your AlertDialog components are defined
-import { onSnapshot } from "firebase/firestore";
+import { usePatients } from "@/contexts/patient-context";
+import { ROLES } from "@/lib/constants";
+import { useForm } from "react-hook-form";
 
+// Centralized appointment types and statuses
+export const APPOINTMENT_TYPES = ["Check-up", "Consultation", "Follow-up", "Procedure"] as const;
+export type AppointmentType = typeof APPOINTMENT_TYPES[number];
+
+export const APPOINTMENT_STATUSES = ["Scheduled", "Confirmed", "Arrived", "Completed", "Cancelled", "No Show"] as const;
+export type AppointmentStatus = typeof APPOINTMENT_STATUSES[number];
+
+export const APPOINTMENT_PAYMENT_STATUSES = ["Pending Payment", "Paid", "Partially Paid", "N/A"] as const;
+export type AppointmentPaymentStatus = typeof APPOINTMENT_PAYMENT_STATUSES[number];
 
 export interface Appointment {
   id: string;
@@ -37,15 +45,15 @@ export interface Appointment {
   providerName: string;
   time: string;
   date: string; // YYYY-MM-DD format
-  type: "Check-up" | "Consultation" | "Follow-up" | "Procedure";
-  status: "Scheduled" | "Confirmed" | "Cancelled" | "Completed" | "Arrived";
+  type: AppointmentType;
+  status: AppointmentStatus;
   invoiceId?: string;
-  paymentStatus?: "Pending Payment" | "Paid" | "N/A";
+  paymentStatus: AppointmentPaymentStatus;
 }
 
 export const APPOINTMENTS_STORAGE_KEY = "navael_appointments";
 
-export const statusBadgeVariant = (status: Appointment["status"]): BadgeProps["variant"] => {
+export const statusBadgeVariant = (status: AppointmentStatus): BadgeProps["variant"] => {
   switch (status) {
     case "Scheduled": return "secondary";
     case "Confirmed": return "default";
@@ -56,13 +64,24 @@ export const statusBadgeVariant = (status: Appointment["status"]): BadgeProps["v
   }
 };
 
-export const paymentStatusBadgeVariant = (status?: Appointment["paymentStatus"]): BadgeProps["variant"] => {
+export const paymentStatusBadgeVariant = (status?: AppointmentPaymentStatus): BadgeProps["variant"] => {
   switch (status) {
-    case "Paid": return "default";
+    case "Paid": return "success";
     case "Pending Payment": return "secondary";
-    default: return "outline";
+    case "Partially Paid": return "outline";
+    case "N/A": return "default";
+    default: return "default";
   }
 };
+
+const filterSchema = z.object({
+  date: z.date().optional(),
+  status: z.string().optional(),
+  paymentStatus: z.string().optional(),
+  providerName: z.string().optional(),
+  patientSearch: z.string().optional(),
+});
+type FilterValues = z.infer<typeof filterSchema>;
 
 export default function AppointmentsPage() {
   const { userRole, username } = useAuth();
@@ -79,52 +98,127 @@ export default function AppointmentsPage() {
   
   const [appointmentToCancel, setAppointmentToCancel] = useState<Appointment | null>(null);
   const [appointmentToPrint, setAppointmentToPrint] = useState<Appointment | null>(null);
+  const [selectedAppointmentForView, setSelectedAppointmentForView] = useState<Appointment | null>(null);
+  const [selectedAppointmentForStatusUpdate, setSelectedAppointmentForStatusUpdate] = useState<Appointment | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const filterForm = useForm<FilterValues>({
+    resolver: zodResolver(filterSchema),
+    defaultValues: {
+      date: undefined,
+      status: "",
+      paymentStatus: "",
+      providerName: "",
+      patientSearch: "",
+    },
+  });
+
+  const allProviders = useMemo(() => {
+    const providers = new Set<string>();
+    appointments.forEach(appt => providers.add(appt.providerName));
+    return Array.from(providers).sort();
+  }, [appointments]);
 
   const displayedAppointments = useMemo(() => {
     if (!userRole) return [];
-    const sortedAppointments = [...appointments].sort((a, b) => {
-        const aDate = parseISO(a.date);
-        const bDate = parseISO(b.date);
-        const now = new Date();
-        now.setHours(0,0,0,0);
-        const aIsUpcoming = aDate >= now && a.status !== "Completed" && a.status !== "Cancelled";
-        const bIsUpcoming = bDate >= now && b.status !== "Completed" && b.status !== "Cancelled";
-        if (aIsUpcoming && !bIsUpcoming) return -1;
-        if (!aIsUpcoming && bIsUpcoming) return 1;
-        if (aIsUpcoming && bIsUpcoming) {
-            const dateComparison = aDate.getTime() - bDate.getTime();
-            if (dateComparison !== 0) return dateComparison;
-            return a.time.localeCompare(b.time);
-        }
-        const dateComparison = bDate.getTime() - aDate.getTime();
-        if (dateComparison !== 0) return dateComparison;
-        return a.time.localeCompare(b.time);
-    });
-    if (userRole === ROLES.DOCTOR || userRole === ROLES.NURSE) {
-      return sortedAppointments.filter(app => app.providerName === username);
-    }
-    return sortedAppointments;
-  }, [appointments, userRole, username]);
+    let filtered = appointments;
 
-  const handleConfirmCancelAppointment = async () => {
-    if (appointmentToCancel) {
-      setActionLoading(true);
-      try {
-        await cancelAppointment(appointmentToCancel.id);
-        toast({
-          title: "Appointment Cancelled",
-          description: `Appointment for ${appointmentToCancel.patientName} has been cancelled.`,
-          variant: "destructive"
-        });
-      } catch (error: any) {
-        toast({
-            title: "Cancellation Failed",
-            description: error.message || "Could not cancel the appointment.",
-            variant: "destructive"
-        });
+    const { date, status, paymentStatus, providerName, patientSearch } = filterForm.getValues();
+
+    if (date) {
+      const selectedDate = format(date, "yyyy-MM-dd");
+      filtered = filtered.filter(appt => appt.date === selectedDate);
+    }
+    if (status) {
+      filtered = filtered.filter(appt => appt.status === status);
+    }
+    if (paymentStatus) {
+      filtered = filtered.filter(appt => appt.paymentStatus === paymentStatus);
+    }
+    if (providerName) {
+      filtered = filtered.filter(appt => appt.providerName === providerName);
+    }
+    if (patientSearch) {
+      filtered = filtered.filter(appt =>
+        appt.patientName.toLowerCase().includes(patientSearch.toLowerCase()) ||
+        appt.patientId.toLowerCase().includes(patientSearch.toLowerCase())
+      );
+    }
+    if (searchTerm) {
+      filtered = filtered.filter(appt =>
+        appt.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        appt.patientId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        appt.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        appt.providerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        appt.type.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    const sorted = [...filtered].sort((a, b) => {
+      const aDate = parseISO(a.date);
+      const bDate = parseISO(b.date);
+      const now = new Date();
+      now.setHours(0,0,0,0);
+      const aIsUpcoming = aDate >= now && a.status !== "Completed" && a.status !== "Cancelled";
+      const bIsUpcoming = bDate >= now && b.status !== "Completed" && b.status !== "Cancelled";
+      
+      if (aIsUpcoming && !bIsUpcoming) return -1;
+      if (!aIsUpcoming && bIsUpcoming) return 1;
+      
+      if (aIsUpcoming && bIsUpcoming) {
+          const dateComparison = aDate.getTime() - bDate.getTime();
+          if (dateComparison !== 0) return dateComparison;
+          return a.time.localeCompare(b.time);
       }
+      
+      const dateComparison = bDate.getTime() - aDate.getTime();
+      if (dateComparison !== 0) return dateComparison;
+      return a.time.localeCompare(b.time);
+    });
+
+    if (userRole === ROLES.DOCTOR || userRole === ROLES.NURSE) {
+      return sorted.filter(app => app.providerName === username);
+    }
+    return sorted;
+  }, [appointments, userRole, username, filterForm, searchTerm]);
+
+
+  const handleStatusUpdate = async (newStatus: AppointmentStatus) => {
+    if (!selectedAppointmentForStatusUpdate) return;
+    setIsUpdatingStatus(true);
+    try {
+      await updateAppointment(selectedAppointmentForStatusUpdate.id, { status: newStatus });
+      toast({
+        title: "Appointment Status Updated",
+        description: `Appointment ${selectedAppointmentForStatusUpdate.id} status changed to ${newStatus}.`,
+      });
+      setSelectedAppointmentForStatusUpdate(null);
+    } catch (error) {
+      toast({ title: "Update Failed", description: "Could not update appointment status.", variant: "destructive" });
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleCancelAppointment = async () => {
+    if (!appointmentToCancel) return;
+    setActionLoading(true);
+    try {
+      await cancelAppointment(appointmentToCancel.id);
+      toast({
+        title: "Appointment Cancelled",
+        description: `Appointment ${appointmentToCancel.id} has been cancelled.`,
+      });
       setAppointmentToCancel(null);
+    } catch (error: any) {
+      toast({
+          title: "Cancellation Failed",
+          description: error.message || "Could not cancel the appointment.",
+          variant: "destructive"
+      });
+    } finally {
       setActionLoading(false);
     }
   };
@@ -157,7 +251,7 @@ export default function AppointmentsPage() {
           const appointmentDate = parseISO(appToUpdate.date);
           const lastVisitDate = patient.lastVisit ? parseISO(patient.lastVisit) : null;
           if (!lastVisitDate || isBefore(lastVisitDate, appointmentDate)) {
-            await updatePatient(patient.id, { ...patient, lastVisit: appToUpdate.date });
+            await updatePatient(patient.id, { lastVisit: appToUpdate.date }); 
           }
         }
         toast({
@@ -182,9 +276,10 @@ export default function AppointmentsPage() {
     }
   };
 
-  const canManageAppointments = userRole === ROLES.RECEPTIONIST || userRole === ROLES.ADMIN;
+  const canManageAdministrativeAppointments = userRole === ROLES.RECEPTIONIST || userRole === ROLES.ADMIN;
+  const canPerformClinicalPatientFlow = canManageAdministrativeAppointments || userRole === ROLES.DOCTOR || userRole === ROLES.NURSE;
 
-  if (isLoadingAppointments && displayedAppointments.length === 0) {
+  if (isLoadingAppointments && displayedAppointments.length === 0 && appointmentsError === null) {
     return (
       <div className="flex items-center justify-center p-10 min-h-[400px]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" /> 
@@ -209,7 +304,7 @@ export default function AppointmentsPage() {
                 Optimize Schedule
              </Button>
           </Link>
-          {canManageAppointments && (
+          {canManageAdministrativeAppointments && (
             <Link href="/dashboard/appointments/new">
               <Button>
                 <NotebookPen className="mr-2 h-4 w-4" /> Book New Appointment
@@ -238,7 +333,7 @@ export default function AppointmentsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoadingAppointments && displayedAppointments.length === 0 ? (
+          {isLoadingAppointments && displayedAppointments.length === 0 && appointmentsError === null ? (
              <div className="flex items-center justify-center min-h-[200px]">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 <p className="ml-2 text-muted-foreground">Loading...</p>
@@ -249,7 +344,7 @@ export default function AppointmentsPage() {
               <p className="text-lg text-muted-foreground">
                 {(userRole === ROLES.DOCTOR || userRole === ROLES.NURSE) ? "No upcoming appointments assigned to you." : "No Upcoming Appointments"}
               </p>
-              {canManageAppointments && (
+              {canManageAdministrativeAppointments && (
                 <p className="text-sm text-muted-foreground mt-1">
                     Use the button above to book a new appointment.
                 </p>
@@ -269,7 +364,7 @@ export default function AppointmentsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {displayedAppointments.map((appointment) => (
+                {displayedAppointments.map((appointment: Appointment) => (
                   <TableRow key={appointment.id}>
                     <TableCell className="font-medium">
                       <Link href={`/dashboard/patients/${appointment.patientId}`} className="hover:underline text-primary">
@@ -292,7 +387,7 @@ export default function AppointmentsPage() {
                         {appointment.paymentStatus || "N/A"}
                       </Badge>
                       {appointment.invoiceId && (
-                        <Link href="/dashboard/billing" className="ml-1 text-xs text-primary hover:underline">
+                        <Link href={`/dashboard/billing?invoiceId=${appointment.invoiceId}`} className="ml-1 text-xs text-primary hover:underline">
                           (ID: {appointment.invoiceId})
                         </Link>
                       )}
@@ -313,7 +408,16 @@ export default function AppointmentsPage() {
                                     <Eye className="mr-2 h-4 w-4"/>View Patient Details
                                 </Link>
                             </DropdownMenuItem>
-                            {canManageAppointments && (appointment.status === "Scheduled" || appointment.status === "Confirmed") && (
+
+                            {canPerformClinicalPatientFlow && (appointment.status === "Arrived" || appointment.status === "Completed") && (
+                                <DropdownMenuItem asChild>
+                                    <Link href={`/dashboard/consultations/new?appointmentId=${appointment.id}`}>
+                                        <NotebookPen className="mr-2 h-4 w-4"/> Start Consultation
+                                    </Link>
+                                </DropdownMenuItem>
+                            )}
+
+                            {canPerformClinicalPatientFlow && (appointment.status === "Scheduled" || appointment.status === "Confirmed") && (
                                 appointment.paymentStatus === "Paid" ? (
                                 <DropdownMenuItem onClick={() => handleCheckInAppointment(appointment.id)} disabled={actionLoading}>
                                     <CheckCircle className="mr-2 h-4 w-4 text-green-600"/> Check-in Patient
@@ -324,22 +428,26 @@ export default function AppointmentsPage() {
                                     </DropdownMenuItem>
                                 )
                             )}
-                            {canManageAppointments && appointment.status === "Arrived" && (
+
+                            {canPerformClinicalPatientFlow && appointment.status === "Arrived" && (
                                 <DropdownMenuItem onClick={() => handleCompleteVisit(appointment.id)} disabled={actionLoading}>
                                     <CheckSquare className="mr-2 h-4 w-4 text-blue-600"/> Complete Visit
                                 </DropdownMenuItem>
                             )}
+
                             <DropdownMenuItem asChild>
                                 <Link href={`/dashboard/appointments/${appointment.id}/reschedule`}>
                                     <Edit className="mr-2 h-4 w-4"/>Reschedule
                                 </Link>
                             </DropdownMenuItem>
+
                              <DialogTrigger asChild>
                                 <DropdownMenuItem onClick={() => setAppointmentToPrint(appointment)}>
                                     <Printer className="mr-2 h-4 w-4" /> Print Slip
                                 </DropdownMenuItem>
                             </DialogTrigger>
-                            {(appointment.status === "Scheduled" || appointment.status === "Confirmed" || appointment.status === "Arrived") && (
+
+                            {canManageAdministrativeAppointments && (appointment.status === "Scheduled" || appointment.status === "Confirmed" || appointment.status === "Arrived") && (
                               <>
                                 <DropdownMenuSeparator />
                                 <AlertDialogTrigger asChild>
@@ -366,8 +474,8 @@ export default function AppointmentsPage() {
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                                 <AlertDialogCancel onClick={() => setAppointmentToCancel(null)} disabled={actionLoading}>Keep Appointment</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleConfirmCancelAppointment} className={buttonVariants({variant: "destructive"})} disabled={actionLoading}>
-                                {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                                <AlertDialogAction onClick={handleCancelAppointment} className={buttonVariants({variant: "destructive"})} disabled={actionLoading}>
+                                {actionLoading && <Loader2 className="h-4 w-4 animate-spin"/>}
                                 Confirm Cancellation
                                 </AlertDialogAction>
                             </AlertDialogFooter>

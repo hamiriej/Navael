@@ -7,6 +7,7 @@ import { ROLES, type Role } from "@/lib/constants";
 import { CalendarCheck, Users, Settings, Pill, BedDouble, MessageSquareText, FilePieChart, CreditCard, ListChecks, FlaskConical, FileSearch, Download, Eye, CheckCircle, Edit, CheckSquare, ListChecks as ListChecksIcon, Droplets, Activity, Microscope, ClipboardCheck as ClipboardCheckIcon, ServerCog, Archive, BookOpenCheck, PackagePlus, Clock, User as UserIcon, Network, NotebookPen, UserPlus as UserPlusIcon, PlusCircle, CalendarClock, Inbox, Sparkles as AiIcon, Loader2, Send, History as HistoryIcon, UserCog, AlertTriangle, FileText, PackageSearch, DollarSign, Link as LinkIcon } from "lucide-react";
 import Link from "next/link";
 import { useState, useMemo, useEffect } from "react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -19,19 +20,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { useRouter } from "next/navigation";
 import * as LucideIcons from 'lucide-react';
 import { cn } from "@/lib/utils";
-
 import { bookAppointmentWithAI, type BookAppointmentAIInput, type BookAppointmentAIOutput } from "@/ai/flows/book-appointment-ai-flow";
 
 import { getActivityLog, type ActivityLogItem } from "@/lib/activityLog";
 
 // Corrected and updated imports from ./lab/page and context
+import type { LabOrder, LabTest } from "@/app/dashboard/lab/types";
 import {
-  type LabOrder,
-  type LabTest,
   StatCard,
-  getLabStatusVariant, // Directly import the correctly named export
+  getLabStatusVariant,
   paymentStatusBadgeVariant as getLabPaymentStatusBadgeVariant,
-  LAB_ORDERS_STORAGE_KEY // This is still exported from lab/page for direct localStorage access if needed elsewhere
+  LAB_ORDERS_STORAGE_KEY
 } from "./lab/page";
 import { useLabOrders } from "@/contexts/lab-order-context"; // Import the context
 
@@ -40,6 +39,9 @@ import {
   statusBadgeVariant as getAppointmentStatusVariant,
 } from "./appointments/page";
 import { useAppointments } from "@/contexts/appointment-context";
+
+import { useInvoices } from "@/contexts/invoice-context";
+import { useAppearanceSettings } from "@/contexts/appearance-settings-context";
 
 
 interface Widget {
@@ -55,7 +57,7 @@ const widgets: Widget[] = [
   { title: "Upcoming Appointments", description: "View and manage your appointments.", icon: CalendarCheck, link: "/dashboard/appointments", roles: [ROLES.DOCTOR, ROLES.NURSE, ROLES.RECEPTIONIST, ROLES.ADMIN, ROLES.PHARMACIST] },
   { title: "Patient Records", description: "Access and update patient information.", icon: Users, link: "/dashboard/patients", roles: Object.values(ROLES) },
   { title: "Consultations", description: "Manage patient consultation records.", icon: MessageSquareText, link: "/dashboard/consultations", roles: [ROLES.DOCTOR, ROLES.NURSE, ROLES.ADMIN] },
-  { title: "Lab Results Viewer", description: "Review completed lab test results.", icon: FlaskConical, link: "/dashboard/lab", roles: [ROLES.DOCTOR, ROLES.NURSE, ROLES.ADMIN, ROLES.RECEPTIONIST, ROLES.PHARMACIST] },
+  { title: "Lab Results Viewer", description: "Review completed lab test results.", icon: FlaskConical, link: "/dashboard/lab", roles: [ROLES.DOCTOR, ROLES.NURSE, ROLES.ADMIN, ROLES.RECEPTIONIST, ROLES.PHARMACIST, ] },
   { title: "Pharmacy Portal", description: "Manage medications and prescriptions.", icon: Pill, link: "/dashboard/pharmacy", roles: [ROLES.PHARMACIST, ROLES.ADMIN, ROLES.DOCTOR, ROLES.NURSE, ROLES.RECEPTIONIST] },
   { title: "Admissions", description: "Manage patient admissions and bed assignments.", icon: BedDouble, link: "/dashboard/admissions", roles: [ROLES.NURSE, ROLES.RECEPTIONIST, ROLES.ADMIN] },
   { title: "Billing & Insurance", description: "Handle patient billing and insurance claims.", icon: CreditCard, link: "/dashboard/billing", roles: [ROLES.RECEPTIONIST, ROLES.ADMIN] },
@@ -78,6 +80,23 @@ export const IconRenderer = ({ iconName, className }: { iconName?: keyof typeof 
   return <IconComponent className={cn("h-5 w-5 text-primary flex-shrink-0", className)} />;
 };
 
+// Helper function to map invoice line item source to a display category
+const mapSourceTypeToCategory = (sourceType?: string): string => {
+  switch (sourceType) {
+    case 'consultation':
+      return 'Appointment';
+    case 'lab':
+      return 'Lab';
+    case 'prescription':
+      return 'Pharmacy';
+    case 'general_service':
+    case 'hospital_stay':
+    case 'manual':
+    default:
+      return 'Other';
+  }
+};
+
 
 export default function DashboardPage() {
   const { userRole, username } = useAuth();
@@ -90,6 +109,69 @@ export default function DashboardPage() {
   const [searchTerm, setSearchTerm] = useState(""); // Search term for lab orders
   const [selectedOrderForModal, setSelectedOrderForModal] = useState<LabOrder | null>(null);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({}); // For individual button loading
+
+    // Add these hooks for revenue calculation
+  const { invoices, isLoadingInvoices } = useInvoices();
+  const { currency } = useAppearanceSettings();
+
+  // Calculate today's revenue for receptionist, memoized for performance.
+  const { todaysRevenue, departmentTotals } = useMemo(() => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    const todaysInvoices = invoices.filter(inv => format(new Date(inv.date), "yyyy-MM-dd") === today);
+    
+    // Initialize with all desired categories to ensure they appear even if zero
+    const serviceTotals: Record<string, number> = {
+      'Appointment': 0,
+      'Lab': 0,
+      'Pharmacy': 0,
+      'Other': 0,
+    };
+
+    todaysInvoices.forEach(inv => {
+      // Prioritize categorizing by appointmentId if it exists. This is the most reliable way
+      // to attribute revenue to an appointment-related activity.
+      if (inv.appointmentId) {
+        serviceTotals['Appointment'] += (inv.amountPaid || 0);
+      } else if (inv.lineItems && inv.lineItems.length > 0) {
+        // Prorate the amount paid across the line items based on their value
+        const prorationFactor = (inv.totalAmount > 0) ? (inv.amountPaid || 0) / inv.totalAmount : 0;
+
+        inv.lineItems.forEach(item => {
+          const category = mapSourceTypeToCategory(item.sourceType);
+          const proratedAmount = (item.total || 0) * prorationFactor;
+          serviceTotals[category] = (serviceTotals[category] || 0) + proratedAmount;
+        });
+      } else {
+        // Final fallback for invoices with no line items and no appointment link
+        serviceTotals['Other'] += (inv.amountPaid || 0);
+      }
+    });
+    const totalRevenue = Object.values(serviceTotals).reduce((sum, amt) => sum + amt, 0);
+
+    return { todaysRevenue: totalRevenue, departmentTotals: serviceTotals };
+  }, [invoices]);
+
+  const pieChartData = useMemo(() => {
+    return Object.entries(departmentTotals)
+      .map(([name, value]) => ({ name, value }))
+      .filter(item => item.value > 0);
+  }, [departmentTotals]);
+
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
+
+  const RADIAN = Math.PI / 180;
+  const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+    if (percent === 0) return null;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+    return (
+      <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize="12px" fontWeight="bold">
+        {`${(percent * 100).toFixed(0)}%`}
+      </text>
+    );
+  };
 
   const [activityLog, setActivityLog] = useState<ActivityLogItem[]>([]);
   const [isLoadingActivityLog, setIsLoadingActivityLog] = useState(true);
@@ -145,6 +227,7 @@ export default function DashboardPage() {
   }, [userRole, contextLabOrders.length, isLoadingContextLabOrders, fetchLabOrders]);
 
 
+
   const handleMarkSampleCollected = async (orderId: string) => {
     setActionLoading(prev => ({...prev, [orderId]: true}));
     const orderToUpdate = contextLabOrders.find(o => o.id === orderId);
@@ -184,14 +267,26 @@ export default function DashboardPage() {
     setActionLoading(prev => ({...prev, [orderId]: false}));
   };
 
-  const filteredLabOrdersForTech = useMemo(() => {
+    const filteredLabOrdersForTech = useMemo(() => {
     if (userRole !== ROLES.LAB_TECH) return [];
-    return contextLabOrders.filter(order =>
-        order.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.orderingDoctor.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [contextLabOrders, searchTerm, userRole]);
+    // Ensure contextLabOrders is an array before filtering
+    if (!Array.isArray(contextLabOrders)) {
+        console.warn("contextLabOrders is not an array:", contextLabOrders);
+        return [];
+    }
+
+    return contextLabOrders.filter(order => {
+        // Add optional chaining and nullish coalescing to ensure we're always calling .toLowerCase() on a string
+        const patientName = (order.patientName ?? "").toLowerCase();
+        const orderId = (order.id ?? "").toLowerCase();
+        const orderingDoctor = (order.orderingDoctor ?? "").toLowerCase();
+        const lowerCaseSearchTerm = searchTerm.toLowerCase();
+
+        return patientName.includes(lowerCaseSearchTerm) ||
+               orderId.includes(lowerCaseSearchTerm) ||
+               orderingDoctor.includes(lowerCaseSearchTerm);
+    });
+  }, [contextLabOrders, searchTerm, userRole]); // Dependencies remain the same
 
   const sampleCollectionQueue = useMemo(() => filteredLabOrdersForTech.filter(o => o.status === "Sample Collected"), [filteredLabOrdersForTech]);
   const testProcessingQueue = useMemo(() => filteredLabOrdersForTech.filter(o => o.status === "Processing"), [filteredLabOrdersForTech]);
@@ -678,78 +773,80 @@ export default function DashboardPage() {
         <p className="text-muted-foreground">Here&apos;s what&apos;s happening in your department today.</p>
       </div>
 
-      {isLoadingAppointments && <div className="flex justify-center p-4"><Loader2 className="h-6 w-6 animate-spin text-primary"/></div>}
-      {!isLoadingAppointments && upcomingAppointments.length > 0 && (userRole !== ROLES.PHARMACIST) && (
-        <Card className="shadow-md">
-          <CardHeader>
-            <CardTitle className="font-headline text-lg flex items-center">
-                <CalendarClock className="mr-2 h-5 w-5 text-primary" /> Today's / Upcoming Appointments
-            </CardTitle>
-            <CardDescription>A quick look at the schedule.</CardDescription>
-          </CardHeader>
-          <CardContent>
-              <ul className="space-y-3">
-                {upcomingAppointments.map(app => (
-                  <li key={app.id} className="p-3 border rounded-md hover:bg-muted/50 transition-colors">
-                    <div className="flex justify-between items-start">
-                      <Link href={`/dashboard/patients/${app.patientId}`} className="hover:underline text-primary font-medium">
-                        {app.patientName}
-                      </Link>
-                       <Badge variant={getAppointmentStatusVariant(app.status)}>{app.status}</Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{app.type} with {app.providerName}</p>
-                    <p className="text-sm text-muted-foreground">{format(parseISO(app.date), "MMM d, yyyy")} at {app.time}</p>
-                  </li>
-                ))}
-              </ul>
-          </CardContent>
-          <CardFooter>
-            <Button variant="outline" asChild className="w-full">
-                <Link href="/dashboard/appointments">View All Appointments</Link>
-            </Button>
-          </CardFooter>
-        </Card>
-      )}
-
-      {userRole && (isLoadingActivityLog && relevantActivityLog.length === 0) ? (
-        <Card className="shadow-md">
-            <CardHeader><CardTitle className="font-headline text-lg">Recent Activity</CardTitle></CardHeader>
-            <CardContent className="flex items-center justify-center min-h-[100px]"><Loader2 className="h-6 w-6 animate-spin text-primary"/></CardContent>
-        </Card>
-      ) : userRole && relevantActivityLog.length > 0 ? (
-         <Card className="shadow-md">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {isLoadingAppointments && <div className="flex justify-center p-4"><Loader2 className="h-6 w-6 animate-spin text-primary"/></div>}
+        {!isLoadingAppointments && upcomingAppointments.length > 0 && (userRole !== ROLES.PHARMACIST) && (
+          <Card className="shadow-md">
             <CardHeader>
-                <CardTitle className="font-headline text-lg flex items-center"><HistoryIcon className="mr-2 h-5 w-5 text-primary"/>Recent System Activity</CardTitle>
-                <CardDescription>A log of key actions. {userRole === ROLES.ADMIN ? "Showing global activity." : `Showing relevant activity for ${userRole}.`}</CardDescription>
+              <CardTitle className="font-headline text-lg flex items-center">
+                  <CalendarClock className="mr-2 h-5 w-5 text-primary" /> Today's / Upcoming Appointments
+              </CardTitle>
+              <CardDescription>A quick look at the schedule.</CardDescription>
             </CardHeader>
             <CardContent>
-                <ul className="space-y-3 max-h-80 overflow-y-auto pr-2">
-                    {relevantActivityLog.map(activity => (
-                        <li key={activity.id} className="flex items-start space-x-3 p-2 border-b border-muted/50 last:border-b-0">
-                            <IconRenderer iconName={activity.iconName} className="mt-1" />
-                            <div className="flex-grow">
-                                <p className="text-sm text-foreground">{activity.actionDescription}</p>
-                                <p className="text-xs text-muted-foreground">
-                                    {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })} by {activity.actorName} ({activity.actorRole})
-                                </p>
-                                {activity.details && <p className="text-xs text-muted-foreground/80">{activity.details}</p>}
-                            </div>
-                            {activity.targetLink && (
-                                <Button variant="ghost" size="sm" asChild>
-                                    <Link href={activity.targetLink}><Eye className="h-4 w-4"/></Link>
-                                </Button>
-                            )}
-                        </li>
-                    ))}
+                <ul className="space-y-3 h-52 overflow-y-auto pr-2">
+                  {upcomingAppointments.map(app => (
+                    <li key={app.id} className="p-3 border rounded-md hover:bg-muted/50 transition-colors">
+                      <div className="flex justify-between items-start">
+                        <Link href={`/dashboard/patients/${app.patientId}`} className="hover:underline text-primary font-medium">
+                          {app.patientName}
+                        </Link>
+                         <Badge variant={getAppointmentStatusVariant(app.status)}>{app.status}</Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{app.type} with {app.providerName}</p>
+                      <p className="text-sm text-muted-foreground">{format(parseISO(app.date), "MMM d, yyyy")} at {app.time}</p>
+                    </li>
+                  ))}
                 </ul>
             </CardContent>
-        </Card>
-      ) : userRole ? (
-        <Card className="shadow-md">
-          <CardHeader><CardTitle className="font-headline text-lg">Recent Activity</CardTitle></CardHeader>
-          <CardContent><p className="text-sm text-muted-foreground">No recent activity to display.</p></CardContent>
-        </Card>
-      ): null}
+            <CardFooter>
+              <Button variant="outline" asChild className="w-full">
+                  <Link href="/dashboard/appointments">View All Appointments</Link>
+              </Button>
+            </CardFooter>
+          </Card>
+        )}
+
+        {userRole && (isLoadingActivityLog && relevantActivityLog.length === 0) ? (
+          <Card className="shadow-md">
+              <CardHeader><CardTitle className="font-headline text-lg">Recent Activity</CardTitle></CardHeader>
+              <CardContent className="flex items-center justify-center min-h-[100px]"><Loader2 className="h-6 w-6 animate-spin text-primary"/></CardContent>
+          </Card>
+        ) : userRole && relevantActivityLog.length > 0 ? (
+           <Card className="shadow-md">
+              <CardHeader>
+                  <CardTitle className="font-headline text-lg flex items-center"><HistoryIcon className="mr-2 h-5 w-5 text-primary"/>Recent System Activity</CardTitle>
+                  <CardDescription>A log of key actions. {userRole === ROLES.ADMIN ? "Showing global activity." : `Showing relevant activity for ${userRole}.`}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                  <ul className="space-y-3 h-52 overflow-y-auto pr-2">
+                      {relevantActivityLog.map(activity => (
+                          <li key={activity.id} className="flex items-start space-x-3 p-2 border-b border-muted/50 last:border-b-0">
+                              <IconRenderer iconName={activity.iconName} className="mt-1" />
+                              <div className="flex-grow">
+                                  <p className="text-sm text-foreground">{activity.actionDescription}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                      {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })} by {activity.actorName} ({activity.actorRole})
+                                  </p>
+                                  {activity.details && <p className="text-xs text-muted-foreground/80">{activity.details}</p>}
+                              </div>
+                              {activity.targetLink && (
+                                  <Button variant="ghost" size="sm" asChild>
+                                      <Link href={activity.targetLink}><Eye className="h-4 w-4"/></Link>
+                                  </Button>
+                              )}
+                          </li>
+                      ))}
+                  </ul>
+              </CardContent>
+          </Card>
+        ) : userRole ? (
+          <Card className="shadow-md">
+            <CardHeader><CardTitle className="font-headline text-lg">Recent Activity</CardTitle></CardHeader>
+            <CardContent><p className="text-sm text-muted-foreground">No recent activity to display.</p></CardContent>
+          </Card>
+        ): null}
+      </div>
 
 
       {userRole === ROLES.RECEPTIONIST && (
@@ -770,6 +867,64 @@ export default function DashboardPage() {
                 ))}
               </CardContent>
             </Card>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="shadow-lg">
+                <CardHeader>
+                  <CardTitle>Today's Revenue Breakdown</CardTitle>
+                  <CardDescription>Collected by service type ({currency})</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-primary mb-2">
+                    Total: {isLoadingInvoices ? <Loader2 className="h-6 w-6 animate-spin inline-block" /> : `${currency} ${todaysRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                  </div>
+                  <ul className="space-y-1">
+                    {Object.entries(departmentTotals).map(([dept, amount]) => (
+                      <li key={dept} className="flex justify-between text-sm">
+                        <span>{dept}</span>
+                        <span>{currency} {amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-lg">
+                  <CardHeader>
+                      <CardTitle>Revenue Distribution</CardTitle>
+                      <CardDescription>Percentage of revenue from each service.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex items-center justify-center">
+                      {pieChartData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={250}>
+                              <PieChart>
+                                  <Pie
+                                      data={pieChartData}
+                                      cx="50%"
+                                      cy="50%"
+                                      labelLine={false}
+                                      label={renderCustomizedLabel}
+                                      outerRadius={100}
+                                      fill="#8884d8"
+                                      dataKey="value"
+                                  >
+                                      {pieChartData.map((entry, index) => (
+                                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                      ))}
+                                  </Pie>
+                                  <Tooltip formatter={(value: number) => [`${currency} ${value.toFixed(2)}`, "Revenue"]} />
+                                  <Legend />
+                              </PieChart>
+                          </ResponsiveContainer>
+                      ) : (
+                          <div className="flex flex-col items-center justify-center h-[250px] text-muted-foreground">
+                              <PackageSearch className="h-12 w-12 mb-2" />
+                              <p>No revenue data for today to display chart.</p>
+                          </div>
+                      )}
+                  </CardContent>
+              </Card>
+            </div>
 
             <Card className="shadow-md">
                 <CardHeader>
@@ -861,13 +1016,13 @@ export default function DashboardPage() {
       })()}
 
 
-      {userRole && !widgets.filter(widget => widget.roles.includes(userRole)).length && userRole !== ROLES.LAB_TECH && userRole !== ROLES.PHARMACIST && (
-         <Card>
-          <CardContent className="p-6">
-            <p className="text-center text-muted-foreground">No specific modules available for your role at the moment.</p>
-          </CardContent>
-        </Card>
-      )}
+      {userRole && !widgets.filter(widget => widget.roles.includes(userRole)).length && (
+  <Card>
+    <CardContent className="p-6">
+      <p className="text-center text-muted-foreground">No specific modules available for your role at the moment.</p>
+    </CardContent>
+  </Card>
+)}
     </div>
   );
 }

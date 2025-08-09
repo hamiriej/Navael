@@ -1,17 +1,10 @@
-// src/contexts/pharmacy-context.tsx
-
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import type { Medication, Prescription } from '@/app/dashboard/pharmacy/page'; // Adjust path if Medication is elsewhere
+import type { Medication, Prescription } from '@/app/dashboard/pharmacy/page';
 
-// If you've removed localStorage usage, these lines can stay commented or be deleted.
-// export const PHARMACY_MEDICATIONS_STORAGE_KEY = 'navael_pharmacy_medications';
-// export const PHARMACY_PRESCRIPTIONS_STORAGE_KEY = 'navael_pharmacy_prescriptions';
-
-export type { Medication, Prescription } from '@/app/dashboard/pharmacy/page'; // Add 'export type' here
-
+export type { Medication, Prescription } from '@/app/dashboard/pharmacy/page';
 
 interface PharmacyContextType {
   medications: Medication[];
@@ -21,21 +14,20 @@ interface PharmacyContextType {
   fetchMedications: () => Promise<void>;
   fetchPrescriptions: () => Promise<void>;
   fetchPrescriptionsForPatientId: (patientId: string) => Promise<Prescription[]>;
+  fetchPrescriptionsForAppointmentId: (appointmentId: string) => Promise<Prescription[]>; // <-- Added!
   addMedication: (newMed: Omit<Medication, 'id' | 'status'>) => Promise<Medication | undefined>;
   updateMedicationInInventory: (medId: string, updates: Partial<Medication>) => Promise<Medication | undefined>;
   deleteMedication: (medId: string) => Promise<void>;
   addPrescription: (newRx: Omit<Prescription, 'id'>) => Promise<Prescription | undefined>;
   updatePrescription: (rxId: string, updates: Partial<Prescription>) => Promise<Prescription | undefined>;
   deletePrescription: (rxId: string) => Promise<void>;
-  getPrescriptionById: (id: string) => Promise<Prescription | undefined>; // This is now fully supported!
-
+  getPrescriptionById: (id: string) => Promise<Prescription | undefined>;
 }
 
 const PharmacyContext = createContext<PharmacyContextType | undefined>(undefined);
 
-// API Endpoints
 const API_MEDICATIONS_URL = '/api/pharmacy/medications';
-const API_PRESCRIPTIONS_URL = '/api/pharmacy/prescriptions'; // For future prescription management API
+const API_PRESCRIPTIONS_URL = '/api/pharmacy/prescriptions';
 
 export const PharmacyProvider = ({ children }: { children: React.ReactNode }) => {
   const [medications, setMedications] = useState<Medication[]>([]);
@@ -45,19 +37,14 @@ export const PharmacyProvider = ({ children }: { children: React.ReactNode }) =>
   const { toast } = useToast();
 
   // --- Medication API Calls ---
-
   const fetchMedications = useCallback(async () => {
     setIsLoadingMedications(true);
     try {
       const response = await fetch(API_MEDICATIONS_URL);
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: response.statusText || `API Error: ${response.status}`}));
-        throw new Error(`Failed to fetch medications: ${errorData.message}`);
-      }
+      if (!response.ok) throw new Error("Failed to fetch medications");
       const data = await response.json();
       setMedications(data);
     } catch (error: any) {
-      console.error("Error fetching medications:", error);
       toast({ title: "Error", description: error.message || "Could not load medications.", variant: "destructive" });
       setMedications([]);
     } finally {
@@ -72,18 +59,12 @@ export const PharmacyProvider = ({ children }: { children: React.ReactNode }) =>
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newMed),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: response.statusText || `API Error: ${response.status}`}));
-        throw new Error(`Failed to add medication: ${errorData.message}`);
-      }
-
+      if (!response.ok) throw new Error("Failed to add medication");
       const addedMed = await response.json();
       setMedications(prev => [...prev, addedMed]);
       toast({ title: "Medication Added", description: `${addedMed.name} has been added.` });
       return addedMed;
     } catch (error: any) {
-      console.error("Error adding medication:", error);
       toast({ title: "Error", description: error.message || "Could not add medication.", variant: "destructive" });
       return undefined;
     }
@@ -92,22 +73,16 @@ export const PharmacyProvider = ({ children }: { children: React.ReactNode }) =>
   const updateMedicationInInventory = useCallback(async (medId: string, updates: Partial<Medication>) => {
     try {
       const response = await fetch(`${API_MEDICATIONS_URL}/${medId}`, {
-        method: 'PATCH', // Use PATCH for partial updates
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: response.statusText || `API Error: ${response.status}`}));
-        throw new Error(`Failed to update medication: ${errorData.message}`);
-      }
-
+      if (!response.ok) throw new Error("Failed to update medication");
       const updatedMed = await response.json();
       setMedications(prev => prev.map(med => (med.id === medId ? updatedMed : med)));
       toast({ title: "Medication Updated", description: `${updatedMed.name} updated.` });
       return updatedMed;
     } catch (error: any) {
-      console.error("Error updating medication:", error);
       toast({ title: "Error", description: error.message || "Could not update medication.", variant: "destructive" });
       return undefined;
     }
@@ -115,37 +90,24 @@ export const PharmacyProvider = ({ children }: { children: React.ReactNode }) =>
 
   const deleteMedication = useCallback(async (medId: string) => {
     try {
-      const response = await fetch(`${API_MEDICATIONS_URL}/${medId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: response.statusText || `API Error: ${response.status}`}));
-        throw new Error(`Failed to delete medication: ${errorData.message}`);
-      }
-
+      const response = await fetch(`${API_MEDICATIONS_URL}/${medId}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error("Failed to delete medication");
       setMedications(prev => prev.filter(med => med.id !== medId));
       toast({ title: "Medication Deleted", description: "Medication removed successfully." });
     } catch (error: any) {
-      console.error("Error deleting medication:", error);
       toast({ title: "Error", description: error.message || "Could not delete medication.", variant: "destructive" });
     }
   }, [toast]);
 
   // --- Prescription API Calls ---
-
   const fetchPrescriptions = useCallback(async () => {
     setIsLoadingPrescriptions(true);
     try {
       const response = await fetch(API_PRESCRIPTIONS_URL);
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: response.statusText || `API Error: ${response.status}`}));
-        throw new Error(`Failed to fetch prescriptions: ${errorData.message}`);
-      }
+      if (!response.ok) throw new Error("Failed to fetch prescriptions");
       const data = await response.json();
-      setPrescriptions(data); // This populates the prescriptions state!
+      setPrescriptions(data);
     } catch (error: any) {
-      console.error("Error fetching prescriptions:", error);
       toast({ title: "Error", description: error.message || "Could not load prescriptions.", variant: "destructive" });
       setPrescriptions([]);
     } finally {
@@ -153,25 +115,36 @@ export const PharmacyProvider = ({ children }: { children: React.ReactNode }) =>
     }
   }, [toast]);
 
-  // NEW FUNCTION: Fetch prescriptions for a specific patient
   const fetchPrescriptionsForPatientId = useCallback(async (patientId: string): Promise<Prescription[]> => {
     setIsLoadingPrescriptions(true);
     try {
-      // Assuming your API supports filtering prescriptions by patientId via a query parameter
       const url = new URL(API_PRESCRIPTIONS_URL, window.location.origin);
       url.searchParams.append('patientId', patientId);
-
       const response = await fetch(url.toString());
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: response.statusText || `API Error: ${response.status}`}));
-        throw new Error(`Failed to fetch prescriptions for patient ${patientId}: ${errorData.message}`);
-      }
+      if (!response.ok) throw new Error("Failed to fetch prescriptions for patient");
       const data: Prescription[] = await response.json();
       return data;
     } catch (error: any) {
-      console.error(`Error fetching prescriptions for patient ${patientId}:`, error);
       toast({ title: "Error", description: error.message || `Could not load prescriptions for patient ${patientId}.`, variant: "destructive" });
-      return []; // Return empty array on error
+      return [];
+    } finally {
+      setIsLoadingPrescriptions(false);
+    }
+  }, [toast]);
+
+  // --- NEW: Fetch prescriptions for a specific appointment ---
+  const fetchPrescriptionsForAppointmentId = useCallback(async (appointmentId: string): Promise<Prescription[]> => {
+    setIsLoadingPrescriptions(true);
+    try {
+      const url = new URL(API_PRESCRIPTIONS_URL, window.location.origin);
+      url.searchParams.append('linkedAppointmentId', appointmentId);
+      const response = await fetch(url.toString());
+      if (!response.ok) throw new Error("Failed to fetch prescriptions for appointment");
+      const data: Prescription[] = await response.json();
+      return data;
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || `Could not load prescriptions for appointment ${appointmentId}.`, variant: "destructive" });
+      return [];
     } finally {
       setIsLoadingPrescriptions(false);
     }
@@ -184,18 +157,12 @@ export const PharmacyProvider = ({ children }: { children: React.ReactNode }) =>
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newRx),
       });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: response.statusText || `API Error: ${response.status}`}));
-        throw new Error(`Failed to add prescription: ${errorData.message}`);
-      }
+      if (!response.ok) throw new Error("Failed to add prescription");
       const addedRx = await response.json();
-      // After adding, you might want to re-fetch all prescriptions
-      // or simply add the new one to the existing state if the API returns the full object
       setPrescriptions(prev => [...prev, addedRx]);
       toast({ title: "Prescription Added", description: `Prescription for ${addedRx.patientName} added.` });
       return addedRx;
     } catch (error: any) {
-      console.error("Error adding prescription:", error);
       toast({ title: "Error", description: error.message || "Could not add prescription.", variant: "destructive" });
       return undefined;
     }
@@ -208,16 +175,12 @@ export const PharmacyProvider = ({ children }: { children: React.ReactNode }) =>
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: response.statusText || `API Error: ${response.status}`}));
-        throw new Error(`Failed to update prescription: ${errorData.message}`);
-      }
+      if (!response.ok) throw new Error("Failed to update prescription");
       const updatedRx = await response.json();
       setPrescriptions(prev => prev.map(rx => (rx.id === rxId ? updatedRx : rx)));
       toast({ title: "Prescription Updated", description: `Prescription ${rxId} updated.` });
       return updatedRx;
     } catch (error: any) {
-      console.error("Error updating prescription:", error);
       toast({ title: "Error", description: error.message || "Could not update prescription.", variant: "destructive" });
       return undefined;
     }
@@ -225,55 +188,38 @@ export const PharmacyProvider = ({ children }: { children: React.ReactNode }) =>
 
   const deletePrescription = useCallback(async (rxId: string) => {
     try {
-      const response = await fetch(`${API_PRESCRIPTIONS_URL}/${rxId}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: response.statusText || `API Error: ${response.status}`}));
-        throw new Error(`Failed to delete prescription: ${errorData.message}`);
-      }
+      const response = await fetch(`${API_PRESCRIPTIONS_URL}/${rxId}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error("Failed to delete prescription");
       setPrescriptions(prev => prev.filter(rx => rx.id !== rxId));
       toast({ title: "Prescription Deleted", description: "Prescription removed successfully." });
     } catch (error: any) {
-      console.error("Error deleting prescription:", error);
       toast({ title: "Error", description: error.message || "Could not delete prescription.", variant: "destructive" });
     }
   }, [toast]);
 
-  // Function to get a single prescription by ID - now correctly defined!
   const getPrescriptionById = useCallback(async (id: string): Promise<Prescription | undefined> => {
-    setIsLoadingPrescriptions(true); // You might want a more specific loading state for single fetches
+    setIsLoadingPrescriptions(true);
     try {
       const response = await fetch(`${API_PRESCRIPTIONS_URL}/${id}`);
       if (!response.ok) {
-        // Handle 404 specifically if you expect it for non-existent IDs
-        if (response.status === 404) {
-          console.warn(`Prescription with ID ${id} not found.`);
-          return undefined; // Return undefined if not found
-        }
-        const errorData = await response.json().catch(() => ({ message: response.statusText || `API Error: ${response.status}`}));
-        throw new Error(`Failed to fetch prescription ${id}: ${errorData.message}`);
+        if (response.status === 404) return undefined;
+        throw new Error("Failed to fetch prescription");
       }
       const data: Prescription = await response.json();
       return data;
     } catch (error: any) {
-      console.error(`Error fetching prescription ${id}:`, error);
       toast({ title: "Error", description: error.message || `Could not load prescription ${id}.`, variant: "destructive" });
-      return undefined; // Return undefined on error
+      return undefined;
     } finally {
-      setIsLoadingPrescriptions(false); // Reset loading state
+      setIsLoadingPrescriptions(false);
     }
   }, [toast]);
 
-
-  // Initial data load on component mount - CORRECTED TO FETCH PRESCRIPTIONS!
   useEffect(() => {
     fetchMedications();
-    // This now actively calls your API to fetch the prescriptions!
     fetchPrescriptions();
-  }, [fetchMedications, fetchPrescriptions]); // Ensure both are in the dependency array
+  }, [fetchMedications, fetchPrescriptions]);
 
-  // Memoized context value to prevent unnecessary re-renders
   const contextValue = React.useMemo(() => ({
     medications,
     prescriptions,
@@ -282,13 +228,14 @@ export const PharmacyProvider = ({ children }: { children: React.ReactNode }) =>
     fetchMedications,
     fetchPrescriptions,
     fetchPrescriptionsForPatientId,
+    fetchPrescriptionsForAppointmentId, // <-- Added!
     addMedication,
     updateMedicationInInventory,
     deleteMedication,
     addPrescription,
     updatePrescription,
     deletePrescription,
-    getPrescriptionById, // <== Explicitly included in the value object!
+    getPrescriptionById,
   }), [
     medications,
     prescriptions,
@@ -297,13 +244,14 @@ export const PharmacyProvider = ({ children }: { children: React.ReactNode }) =>
     fetchMedications,
     fetchPrescriptions,
     fetchPrescriptionsForPatientId,
+    fetchPrescriptionsForAppointmentId, // <-- Added!
     addMedication,
     updateMedicationInInventory,
     deleteMedication,
     addPrescription,
     updatePrescription,
     deletePrescription,
-    getPrescriptionById, // <== Explicitly included in the dependency array!
+    getPrescriptionById,
   ]);
 
   return (

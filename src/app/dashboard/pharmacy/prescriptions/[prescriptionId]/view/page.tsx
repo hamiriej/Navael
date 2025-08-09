@@ -1,21 +1,20 @@
-
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, FileText, UserCircle, Pill, CalendarDays, CheckCircle, DollarSign, Info, Loader2, RefreshCw } from "lucide-react"; // Added Loader2, RefreshCw
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"; // <-- Added CardFooter
+import { ArrowLeft, FileText, UserCircle, Pill, CalendarDays, CheckCircle, DollarSign, Info, Loader2, RefreshCw } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { type Prescription, prescriptionStatusVariant, paymentStatusBadgeVariant } from "../../../page"; // Use type from context/main page
+import { type Prescription, prescriptionStatusVariant, paymentStatusBadgeVariant } from "../../../page";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { usePatients } from "@/contexts/patient-context";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
 import { useAppearanceSettings } from "@/contexts/appearance-settings-context";
-import { usePharmacy } from "@/contexts/pharmacy-context"; // Import usePharmacy
+import { usePharmacy } from "@/contexts/pharmacy-context";
 import { format, parseISO } from "date-fns";
-import { useToast } from "@/hooks/use-toast"; // Import useToast
+import { useToast } from "@/hooks/use-toast";
 
 const DetailItem = ({ label, value, icon: Icon }: { label: string; value?: string; icon?: React.ElementType }) => {
   if (!value) return null;
@@ -34,12 +33,12 @@ export default function ViewPrescriptionPage() {
   const prescriptionId = params.prescriptionId as string;
   const { getPatientById } = usePatients();
   const { currency } = useAppearanceSettings();
-  const { getPrescriptionById, isLoadingPrescriptions, updatePrescription } = usePharmacy(); // Use PharmacyContext
+  const { getPrescriptionById, isLoadingPrescriptions, updatePrescription } = usePharmacy();
   const { toast } = useToast();
 
   const [prescription, setPrescription] = useState<Prescription | null>(null);
   const [isRequestingRefill, setIsRequestingRefill] = useState(false);
-
+  const [patient, setPatient] = useState<any | null>(null); // Use correct type if available
 
   useEffect(() => {
     const loadPrescription = async () => {
@@ -48,7 +47,6 @@ export default function ViewPrescriptionPage() {
         if (fetchedPrescription) {
           setPrescription(fetchedPrescription);
         } else {
-          console.error("Prescription not found");
           toast({ title: "Error", description: "Prescription not found.", variant: "destructive" });
           router.push("/dashboard/pharmacy");
         }
@@ -56,6 +54,16 @@ export default function ViewPrescriptionPage() {
     };
     loadPrescription();
   }, [prescriptionId, router, getPrescriptionById, toast]);
+
+  useEffect(() => {
+    const fetchPatient = async () => {
+      if (prescription?.patientId) {
+        const result = await getPatientById(prescription.patientId);
+        setPatient(result || null);
+      }
+    };
+    fetchPatient();
+  }, [prescription?.patientId, getPatientById]);
 
   const handleRequestRefill = async () => {
     if (!prescription || !prescription.refillable || (prescription.refillsRemaining !== undefined && prescription.refillsRemaining <= 0)) {
@@ -70,11 +78,9 @@ export default function ViewPrescriptionPage() {
         if (updatedRxData.refillsRemaining === 0) {
             updatedRxData.refillable = false;
         }
-        // We might also want to change the status to "Pending" or a "Refill Requested" status if that exists.
-        // For now, just updating refills.
         const updatedPrescription = await updatePrescription(prescription.id, updatedRxData);
         if (updatedPrescription) {
-            setPrescription(updatedPrescription); // Update local state
+            setPrescription(updatedPrescription);
             toast({
                 title: "Refill Requested",
                 description: `Refill request for ${updatedPrescription.medicationName} submitted.`,
@@ -87,8 +93,7 @@ export default function ViewPrescriptionPage() {
     }
   };
 
-
-  if (isLoadingPrescriptions && !prescription) { // Show loader if context is loading and no prescription data yet
+  if (isLoadingPrescriptions && !prescription) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary"/></div>;
   }
 
@@ -103,7 +108,6 @@ export default function ViewPrescriptionPage() {
     );
   }
 
-  const patient = getPatientById(prescription.patientId);
   const isEligibleForRefillRequest = prescription.refillable && (prescription.refillsRemaining === undefined || prescription.refillsRemaining > 0) && (prescription.status === "Dispensed" || prescription.status === "Filled");
 
   return (
@@ -193,11 +197,8 @@ export default function ViewPrescriptionPage() {
                     </Button>
                 </CardFooter>
             )}
-
-
         </CardContent>
       </Card>
     </div>
   );
 }
-

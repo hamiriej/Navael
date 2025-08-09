@@ -111,10 +111,18 @@ export function AppSidebarContent() {
     return null;
   }
 
-  const filteredNavItems = navItems.filter(item => userRole && item.roles.includes(userRole)).sort((a,b) => {
-    // Optional: Custom sort order if needed, e.g. keeping Admin Panel last
+  const filteredNavItems = navItems
+    .filter(item => userRole && item.roles.includes(userRole))
+    .sort((a, b) => {
+    // Rule 1: Dashboard always comes first.
+    if (a.label === "Dashboard") return -1;
+    if (b.label === "Dashboard") return 1;
+
+    // Rule 2: Admin Panel always comes last.
     if (a.label === "Admin Panel") return 1;
     if (b.label === "Admin Panel") return -1;
+
+    // Rule 3: Sort all other items alphabetically.
     return a.label.localeCompare(b.label);
   });
 

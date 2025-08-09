@@ -42,7 +42,7 @@ interface ThemeColors {
   accent: string;
 }
 
-interface AppearanceSettings {
+export interface AppearanceSettings {
   logoDataUrl: string | null;
   logoWidth: number;
   themeColors: ThemeColors;
