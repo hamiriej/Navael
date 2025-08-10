@@ -1,4 +1,3 @@
-# apphosting.yaml
 runConfig:
   minInstances: 1
   maxInstances: 5
@@ -8,6 +7,12 @@ runConfig:
 
 env:
   # Existing GenAI secret (keep it as is)
+  # IMPORTANT: Make sure your AI code (especially in Next.js) is reading this
+  # environment variable with the exact name 'google_api_key' if it needs
+  # access on the server-side. If your *client-side* Next.js code needs it,
+  # it would typically be prefixed with NEXT_PUBLIC_ (e.g., NEXT_PUBLIC_GOOGLE_API_KEY),
+  # and you'd need to ensure the variable name matches exactly in your code!
+  # If it's a sensitive key for server-side use only, then 'google_api_key' is fine.
   - variable: google_api_key
     secret: genai_api_key
     availability:
@@ -33,8 +38,10 @@ env:
       - BUILD
       - RUNTIME
 
+  # Corrected Firebase Storage bucket name!
+  # Firebase storage buckets end with .appspot.com, not .firebasestorage.app
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-    value: "navael.firebasestorage.app"
+    value: "navael.appspot.com" # <--- This is the key change here!
     availability:
       - BUILD
       - RUNTIME
@@ -45,12 +52,8 @@ env:
       - BUILD
       - RUNTIME
 
-
-
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
     value: "1:36160001734:web:ee096485297757ec1c29c7"
     availability:
       - BUILD
       - RUNTIME
-
-
