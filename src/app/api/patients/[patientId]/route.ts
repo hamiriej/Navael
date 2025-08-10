@@ -121,3 +121,33 @@ export async function DELETE(req: NextRequest, { params }: PatientApiParams) {
     );
   }
 }
+
+/**
+ * Handles POST requests to create a new patient.
+ * Note: This is added here but ideally should be in /api/patients (without patientId param).
+ * For now, adding it here to handle POST requests without breaking.
+ */
+export async function POST(req: NextRequest) {
+  try {
+    const newPatientData: Partial<Patient> = await req.json();
+
+    // Add validation here if needed (e.g., required fields)
+
+    const docRef = await adminDb.collection('patients').add(newPatientData);
+
+    const createdPatientDoc = await docRef.get();
+
+    const createdPatient: Patient = {
+      id: createdPatientDoc.id,
+      ...(createdPatientDoc.data() as Omit<Patient, 'id'>),
+    };
+
+    return NextResponse.json(createdPatient, { status: 201 });
+  } catch (error) {
+    console.error('Error creating patient:', error);
+    return NextResponse.json(
+      { message: 'Failed to create patient', error: (error as Error).message },
+      { status: 500 }
+    );
+  }
+}
