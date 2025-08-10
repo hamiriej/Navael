@@ -1,29 +1,52 @@
 # apphosting.yaml
-# This file defines the backend configuration for Firebase App Hosting.
-
-# Optional: Configuration for your Cloud Run service (where your app will run)
-# Adjust these based on your application's needs for performance and cost.
 runConfig:
   minInstances: 1
   maxInstances: 5
-  concurrency: 80 # Number of concurrent requests a single instance can handle
-  cpu: 1 # Number of CPU cores
-  memoryMiB: 512 # Memory allocated per instance (in MiB)
-
-# Environment variables made available to your application during build and runtime.
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
 
 env:
-  # Reference the GenAI API key from Google Cloud Secret Manager.
-  # This keeps your actual key out of source control (GitHub).
-  - variable: google_api_key # <--- This must be 'google_api_key' (lowercase)
-    secret: genai_api_key     # <--- This is the NAME of your secret in Secret Manager
+  # Existing GenAI secret (keep it as is)
+  - variable: google_api_key
+    secret: genai_api_key
+    availability:
+      - BUILD
+      - RUNTIME
 
+  # Add Firebase environment variables below
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: "AIzaSyBKm9xhWBogV4Muk3d70rn6_-lo73T2irw"
+    availability:
+      - BUILD
+      - RUNTIME
 
-  # FIREBASE_CONFIG and FIREBASE_WEBAPP_CONFIG are typically automatically
-  # injected by App Hosting, so you don't usually need to define them here.
-  # However, if you have other custom environment variables, you can add them like so:
-  # - variable: MY_CUSTOM_VAR
-  #   value: "some_value"
-  #   availability:
-  #     - BUILD
-  #     - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: "navael.firebaseapp.com"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: "navael"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: "navael.firebasestorage.app"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "36160001734"
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:36160001734:web:ee096485297757ec1c29c7"
+    availability:
+      - BUILD
+      - RUNTIME
