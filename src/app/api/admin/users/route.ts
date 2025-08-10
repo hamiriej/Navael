@@ -63,8 +63,11 @@ export async function POST(request: Request) {
       role: role,
       status: status,
       lastLogin: new Date().toISOString(),
-      officeNumber: officeNumber || undefined,
-      staffId: undefined // Correctly typed now with MockUser update
+      // --- MODIFICATION HERE: Convert 'undefined' values to 'null' ---
+      // Use nullish coalescing (??) to set officeNumber to null if it's undefined or null
+      officeNumber: officeNumber ?? null,
+      // Explicitly set staffId to null if it's not provided or has no value yet
+      staffId: null
     };
 
     console.log("Attempting to save to Firestore:", newUserProfile);
