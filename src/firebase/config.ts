@@ -1,12 +1,10 @@
 // src/firebase/config.ts
-
-import { initializeApp, getApps, getApp } from 'firebase/app'; // Import getApps and getApp
-import { getFirestore } from 'firebase/firestore';
-// If you're also using Auth, add getAuth:
-// import { getAuth } from 'firebase/auth';
-// If you're also using Storage, add getStorage:
-// import { getStorage } from 'firebase/storage';
-
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { getFirestore, Firestore } from 'firebase/firestore';
+// If you're also using Auth, add getAuth and Auth:
+// import { getAuth, Auth } from 'firebase/auth';
+// If you're also using Storage, add getStorage and FirebaseStorage:
+// import { getStorage, FirebaseStorage } from 'firebase/storage';
 
 // Your Firebase project configuration
 const firebaseConfig = {
@@ -19,16 +17,26 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-let firebaseApp;
-if (!getApps().length) { // Check if no Firebase apps have been initialized
-  firebaseApp = initializeApp(firebaseConfig);
-} else {
-  firebaseApp = getApp(); // If an app already exists, retrieve it
+let firebaseApp: FirebaseApp | undefined;
+let db: Firestore | undefined; // Make db potentially undefined
+// let auth: Auth | undefined; // Make auth potentially undefined
+// let storage: FirebaseStorage | undefined; // Make storage potentially undefined
+
+
+// Only initialize Firebase client SDK if in a browser environment
+if (typeof window !== 'undefined') {
+  if (!getApps().length) {
+    firebaseApp = initializeApp(firebaseConfig);
+  } else {
+    firebaseApp = getApp();
+  }
+
+  // Get references to services only if firebaseApp is initialized
+  db = getFirestore(firebaseApp);
+  // auth = getAuth(firebaseApp);
+  // storage = getStorage(firebaseApp);
 }
 
-// Get a reference to the Firestore service
-export const db = getFirestore(firebaseApp);
-
-// Export other services if you need them:
-// export const auth = getAuth(firebaseApp);
-// export const storage = getStorage(firebaseApp);
+// Export the initialized services (they will be undefined on the server)
+export { firebaseApp, db };
+// export { firebaseApp, db, auth, storage }; // If you export other services
