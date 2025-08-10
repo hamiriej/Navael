@@ -14,19 +14,6 @@
         "npm --prefix \"$RESOURCE_DIR\" run build"
       ]
     }
-  ],
-  "apphosting": { // <-- ADD THIS NEW BLOCK
-    "navael-frontend": { // <-- Replace "navael-frontend" if your backend name is different, but this matches your info
-      "source": ".", // This tells App Hosting where your Next.js app's root is. Assuming it's in the same directory as firebase.json.
-      "nodeVersion": "22", // Specify your Node.js version, matches what the build logs used
-      "environmentVariables": {
-        "google_api_key": "AIzaSyANC2F_FhjAi7k0lKH4aflBCPPRxhJIdj8" // <-- Your actual key here!
-      }
-    }
-    // If you had other app hosting backends (like "studio"), they would go here too:
-    // "studio": {
-    //   "source": "./studio-folder",
-    //   "environmentVariables": { ... }
-    // }
-  }
+  ]
+  
 }
