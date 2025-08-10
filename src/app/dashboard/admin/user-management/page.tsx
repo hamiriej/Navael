@@ -1,4 +1,3 @@
-
 "use client";
 
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -52,7 +51,8 @@ async function handleUserManagementApiResponse<T>(response: Response): Promise<T
     console.error("API Error Response:", errorData);
     throw new Error(errorData.message || `API Error: ${response.status}`);
   }
-  if (response.status === 204) return {} as T; 
+  // MODIFIED LINE: Return 'undefined' for 204 No Content, which is more typical for void promises
+  if (response.status === 204) return undefined as T; 
   return response.json() as Promise<T>;
 }
 
@@ -93,7 +93,8 @@ export async function deleteUserService(userId: string): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/${userId}`, {
     method: 'DELETE',
   });
-  await handleUserManagementApiResponse<null>(response);
+  // handleUserManagementApiResponse<null> will now return undefined, satisfying Promise<void>
+  await handleUserManagementApiResponse<null>(response); 
 }
 
 let localUserCache: MockUser[] = [];
@@ -124,12 +125,15 @@ export default function UserManagementPage() {
       const users = await fetchUsers();
       setDisplayUsers(users);
       localUserCache = users; 
-    } catch (error: any) {
+    }
+    catch (error: any) {
       toast({ title: "Error Loading Users", description: error.message || "Could not load users.", variant: "destructive"});
       setDisplayUsers([]);
       localUserCache = [];
     }
-    setIsLoadingUsers(false);
+    finally { // Ensures loading state is reset even if an error occurs
+      setIsLoadingUsers(false);
+    }
   }, [toast]);
 
   useEffect(() => {
@@ -373,4 +377,3 @@ export default function UserManagementPage() {
     </div>
   );
 }
-    
