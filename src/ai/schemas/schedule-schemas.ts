@@ -7,6 +7,7 @@ export const StaffMemberSchema = z.object({
   role: z.string(),
 });
 
+
 export const GeneratedShiftSchema = z.object({
   staffId: z.string().describe("The ID of the staff member assigned to this shift."),
   staffName: z.string().describe("The name of the staff member. This should match a name from the input staffList."),
