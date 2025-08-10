@@ -16,7 +16,6 @@ env:
   # This keeps your actual key out of source control (GitHub).
   - variable: google_api_key # <--- IMPORTANT: This MUST be 'google_api_key' (lowercase)
                               #      as your code expects process.env.google_api_key.
-    secret: genai_api_key     # <--- This is the NAME of your secret in Google Cloud Secret Manager.
                               #      Make sure it matches exactly!
 
   # FIREBASE_CONFIG and FIREBASE_WEBAPP_CONFIG are typically automatically
