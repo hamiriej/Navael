@@ -1,4 +1,4 @@
-# In your apphosting.yaml file
+# apphosting.yaml
 # This file defines the backend configuration for Firebase App Hosting.
 
 # Optional: Configuration for your Cloud Run service (where your app will run)
@@ -14,9 +14,8 @@ runConfig:
 env:
   # Reference the GenAI API key from Google Cloud Secret Manager.
   # This keeps your actual key out of source control (GitHub).
-  - variable: google_api_key # <--- IMPORTANT: This MUST be 'google_api_key' (lowercase)
-                              #      as your code expects process.env.google_api_key.
-                              #      Make sure it matches exactly!
+  - variable: google_api_key # <--- This must be 'google_api_key' (lowercase)
+    secret: genai_api_key     # <--- This is the NAME of your secret in Secret Manager
 
   # FIREBASE_CONFIG and FIREBASE_WEBAPP_CONFIG are typically automatically
   # injected by App Hosting, so you don't usually need to define them here.
