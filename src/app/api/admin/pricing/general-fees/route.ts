@@ -9,6 +9,7 @@ const generalFeesSchema = z.object({
   checkupFee: z.coerce.number().min(0, "Fee cannot be negative"),
 });
 
+
 const GENERAL_FEES_STORAGE_KEY = 'navael_pricing_general_fees';
 
 // Default values if nothing in storage
