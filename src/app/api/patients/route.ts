@@ -13,6 +13,7 @@ import { Patient } from '@/contexts/patient-context'; // IMPORT YOUR PATIENT INT
 
 export async function POST(req: NextRequest) {
   try {
+    
     // The request body will contain the data that your frontend `addPatient`
     // function has prepared for storage (e.g., firstName, lastName, dateOfBirth as string, etc.)
     const patientDataFromFrontend: Omit<Patient, 'id' | 'createdAt'> = await req.json();
