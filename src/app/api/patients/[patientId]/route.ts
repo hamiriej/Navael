@@ -2,12 +2,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin'; // Your Firebase Admin SDK instance
+import { Timestamp, FieldValue } from 'firebase-admin/firestore'; // Import Timestamp and FieldValue
 import { Patient } from '@/contexts/patient-context'; // Import your Patient interface
-import { Timestamp } from 'firebase-admin/firestore'; // Import Timestamp for Firestore dates
 
-// Import any necessary AI client libraries or utility functions here
-// For example, if you're using Google's GenAI SDK:
-// import { GoogleGenerativeAI } from '@google/generative-ai';
+// Import AI client library. Assuming Google Generative AI for this example.
+import { GoogleGenerativeAI } from '@google/generative-ai'; // Make sure you have installed: npm install @google/generative-ai
 
 
 // Define the shape of the parameters for the dynamic route
@@ -33,16 +32,24 @@ export async function GET(req: NextRequest, { params }: PatientApiParams) {
       return NextResponse.json({ message: 'Patient not found' }, { status: 404 });
     }
 
-    // Cast the data to your Patient interface and include the document ID
+    // Cast the data to your Patient interface.
+    // Ensure `createdAt` and `updatedAt` are correctly cast to Timestamp if your interface expects them.
+    // Apply safer defaults for optional fields if they might be missing in Firestore.
     const patientData: Patient = {
       id: patientDoc.id,
-      ...(patientDoc.data() as Omit<Patient, 'id'>) // Exclude 'id' from the casted data as we're adding it manually
+      // Assuming all fields are present or handled by your Patient interface directly
+      // If any fields are optional and you want strict defaults:
+      // email: (patientDoc.data()?.email || '') as string,
+      // allergies: (patientDoc.data()?.allergies || []) as string[],
+      ...(patientDoc.data() as Omit<Patient, 'id' | 'createdAt' | 'updatedAt'>), // Cast other common fields
+      createdAt: patientDoc.data()?.createdAt as Timestamp, // Explicitly cast to Timestamp
+      updatedAt: patientDoc.data()?.updatedAt as Timestamp, // Explicitly cast to Timestamp
     };
 
     return NextResponse.json(patientData, { status: 200 });
 
   } catch (error) {
-    console.error('Error fetching patient:', error);
+    console.error(`Error fetching patient ${params.patientId}:`, error);
     return NextResponse.json(
       { message: 'Failed to fetch patient', error: (error as Error).message },
       { status: 500 }
@@ -57,47 +64,46 @@ export async function GET(req: NextRequest, { params }: PatientApiParams) {
  * @returns NextResponse with the updated patient data or an error message.
  */
 export async function PATCH(req: NextRequest, { params }: PatientApiParams) {
+  let updatedData: Partial<Patient> | undefined; // Declare outside try for error logging
+
   try {
     const { patientId } = params;
-    // The request body will contain a partial Patient object with updated fields
-    const updatedData: Partial<Patient> = await req.json();
+    updatedData = await req.json(); // The request body will contain a partial Patient object
 
-    // --- DIAGNOSTIC CONSOLE.LOGS START ---
-    console.log('Incoming PATCH request to /api/patients/', patientId);
-    console.log('Received updatedData from frontend:', JSON.stringify(updatedData, null, 2)); // Stringify for readable JSON output
-    console.log('Does updatedData contain status property?', 'status' in updatedData);
-    if ('status' in updatedData) {
-        console.log('Value of status in updatedData:', updatedData.status);
-    } else {
-        console.log('Status property is NOT present in updatedData.');
-    }
-    // --- DIAGNOSTIC CONSOLE.LOGS END ---
+    console.log(`Incoming PATCH request to /api/patients/${patientId}, payload:`, JSON.stringify(updatedData, null, 2));
 
-    // Use object destructuring to exclude 'id' and 'createdAt'
-    // These properties should not be updated directly from the client.
+    // Exclude 'id' and 'createdAt' from direct update
     const { id, createdAt, ...dataToUpdate } = updatedData;
 
-    // Perform the update in Firestore with the filtered data
-    await adminDb.collection('patients').doc(patientId).update(dataToUpdate);
+    // Add server-side 'updatedAt' timestamp using FieldValue.serverTimestamp()
+    const finalDataToUpdate = {
+      ...dataToUpdate,
+      updatedAt: FieldValue.serverTimestamp(), // Consistent timestamp for updates
+    };
+
+    await adminDb.collection('patients').doc(patientId).update(finalDataToUpdate);
 
     // Fetch the updated document to return the complete, current state
     const updatedPatientDoc = await adminDb.collection('patients').doc(patientId).get();
 
     if (!updatedPatientDoc.exists) {
-        // This case should ideally not happen if update was successful
         return NextResponse.json({ message: 'Updated patient not found after update' }, { status: 404 });
     }
 
     const patientResponse: Patient = {
         id: updatedPatientDoc.id,
-        ...(updatedPatientDoc.data() as Omit<Patient, 'id'>)
+        // Apply safer defaults and type casting when constructing the response
+        ...(updatedPatientDoc.data() as Omit<Patient, 'id' | 'createdAt' | 'updatedAt'>),
+        createdAt: updatedPatientDoc.data()?.createdAt as Timestamp,
+        updatedAt: updatedPatientDoc.data()?.updatedAt as Timestamp,
     };
 
     return NextResponse.json(patientResponse, { status: 200 });
 
   } catch (error) {
-    console.error('Error updating patient:', error);
-    // Add more specific error handling if needed (e.g., Firestore validation errors)
+    console.error(`Error updating patient ${params.patientId}:`, error);
+    // Log the payload if the update failed for better debugging
+    console.error('Payload that caused PATCH error:', updatedData ? JSON.stringify(updatedData, null, 2) : 'N/A');
     return NextResponse.json(
       { message: 'Failed to update patient', error: (error as Error).message },
       { status: 500 }
@@ -107,74 +113,89 @@ export async function PATCH(req: NextRequest, { params }: PatientApiParams) {
 
 /**
  * Handles POST requests to generate and potentially save an AI summary for a patient.
- * This is the handler you need to add for your AI feature!
+ * THIS IS THE NEW HANDLER FOR YOUR AI FEATURE!
  * @param req The NextRequest object containing data for AI summary generation (e.g., consultation notes).
  * @param params The dynamic route parameters, containing patientId.
  * @returns NextResponse with the generated summary or an error message.
  */
 export async function POST(req: NextRequest, { params }: PatientApiParams) {
   const { patientId } = params;
+  let requestBody: { notesToSummarize?: string } | undefined; // Declare for error logging
 
   try {
     // 1. Get data from the request body
-    // The frontend should send the notes/data needed for the AI summary
-    const { notesToSummarize } = await req.json();
+    requestBody = await req.json();
+    const { notesToSummarize } = requestBody;
 
-    if (!notesToSummarize || typeof notesToSummarize !== 'string') {
-      return NextResponse.json({ message: 'Notes for AI summary are required.' }, { status: 400 });
+    console.log(`Incoming POST request to generate AI summary for patient ${patientId}, payload:`, JSON.stringify(requestBody, null, 2));
+
+    if (!notesToSummarize || typeof notesToSummarize !== 'string' || notesToSummarize.trim() === '') {
+      return NextResponse.json({ message: 'Consultation notes are required for AI summary.' }, { status: 400 });
     }
 
-    console.log(`Generating AI summary for patient ${patientId}...`);
-    // console.log('Notes:', notesToSummarize); // Be cautious logging sensitive patient data in production!
-
     // 2. Initialize your AI client (e.g., Google Generative AI)
-    // You'll need to install the SDK if you haven't already: npm install @google/generative-ai
-    // const genAI = new GoogleGenerativeAI(process.env.google_api_key!); // Use your environment variable
+    // Make sure process.env.google_api_key is set correctly in apphosting.yaml and Secret Manager.
+    // The '!' asserts that the environment variable will exist at runtime.
+    const genAI = new GoogleGenerativeAI(process.env.google_api_key!);
 
     // 3. Make the AI API call
-    // const model = genAI.getGenerativeModel({ model: "gemini-pro" }); // Or your chosen model
-    // const prompt = `Summarize the following patient consultation notes in a concise manner: ${notesToSummarize}`;
-    // const result = await model.generateContent(prompt);
-    // const response = await result.response;
-    // const aiSummaryContent = response.text();
+    // Select your generative model (e.g., "gemini-pro", "gemini-1.5-pro-latest")
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-    // --- MOCK AI RESPONSE FOR DEVELOPMENT/TESTING ---
-    // Remove this block once your actual AI integration is ready
-    const aiSummaryContent = `AI Summary for Patient ${patientId}: The patient presented with [key symptom] and was advised [treatment/next steps]. This summary is derived from ${notesToSummarize.length} characters of notes.`;
-    // --- END MOCK AI RESPONSE ---
+    const prompt = `Please provide a concise summary of the following patient consultation notes. Focus on key symptoms, diagnosis, treatment plan, and next steps:\n\n${notesToSummarize}`;
 
+    console.log(`Sending prompt to AI for patient ${patientId}...`);
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const aiSummaryContent = response.text();
+    console.log(`AI summary generated for patient ${patientId}.`);
 
     // 4. Optionally, save the summary to Firestore
-    // You might create a subcollection of 'summaries' under the patient's document
-    const summaryRef = adminDb
+    // Creating a subcollection 'aiSummaries' under the patient's document is a good pattern.
+    const summaryData = {
+      content: aiSummaryContent,
+      notesUsed: notesToSummarize, // You might or might not want to save the original notes
+      createdAt: FieldValue.serverTimestamp(), // Use serverTimestamp for accuracy
+      patientId: patientId, // Redundant but useful for queries
+      // Add other metadata like 'modelUsed', 'userId' if available from request context
+    };
+
+    const summaryRef = await adminDb
       .collection('patients')
       .doc(patientId)
       .collection('aiSummaries')
-      .add({
-        content: aiSummaryContent,
-        notesUsed: notesToSummarize, // You might or might not want to save the original notes
-        createdAt: Timestamp.now(), // Use Firestore Timestamp
-        // Add any other relevant metadata like 'modelUsed', 'userId' etc.
-      });
+      .add(summaryData);
 
-    console.log(`AI summary generated and saved for patient ${patientId}`);
+    console.log(`AI summary saved to Firestore with ID: ${summaryRef.id}`);
 
     // 5. Return the summary to the frontend
     return NextResponse.json(
-      { message: 'AI summary generated successfully', summary: aiSummaryContent, summaryId: (await summaryRef).id },
-      { status: 201 } // 201 Created is appropriate if you're creating a new summary record
+      {
+        message: 'AI summary generated successfully',
+        summary: aiSummaryContent,
+        summaryId: summaryRef.id // Return the ID of the new summary document
+      },
+      { status: 201 } // 201 Created is appropriate as a new resource (the summary) is created
     );
 
   } catch (error) {
     console.error(`Error generating AI summary for patient ${patientId}:`, error);
+    // Log the request body that led to the error
+    console.error('Payload that caused AI summary error:', requestBody ? JSON.stringify(requestBody, null, 2) : 'N/A');
 
-    // This is where potential errors from the AI API call or Firestore write would be caught.
-    // Ensure `process.env.google_api_key` is correctly fetched, and the service account
-    // has roles like `Vertex AI User` or `aiplatform.user` if using Google AI services.
-    // Also, ensure it has `Secret Manager Secret Accessor` to get the key.
+    // Provide more specific error messages if certain common issues are detected (e.g., API key, permissions)
+    let errorMessage = 'Failed to generate AI summary.';
+    if (error instanceof Error) {
+        errorMessage = error.message;
+        if (error.message.includes('API key')) {
+            errorMessage = 'AI API key issue. Please check your google_api_key.';
+        } else if (error.message.includes('permission denied')) {
+            errorMessage = 'AI service permission issue. Check IAM roles for firebase-app-hosting-compute.';
+        }
+    }
 
     return NextResponse.json(
-      { message: 'Failed to generate AI summary', error: (error as Error).message },
+      { message: errorMessage, error: errorMessage },
       { status: 500 }
     );
   }
@@ -195,7 +216,7 @@ export async function DELETE(req: NextRequest, { params }: PatientApiParams) {
     return NextResponse.json({ message: 'Patient deleted successfully' }, { status: 200 });
 
   } catch (error) {
-    console.error('Error deleting patient:', error);
+    console.error(`Error deleting patient ${params.patientId}:`, error);
     return NextResponse.json(
       { message: 'Failed to delete patient', error: (error as Error).message },
       { status: 500 }
