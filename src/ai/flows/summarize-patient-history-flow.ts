@@ -1,6 +1,6 @@
 // src/ai/flows/summarize-patient-history-flow.ts
 
-'use server';
+'use server'; // Keep this!
 /**
  * @fileOverview An AI flow to summarize patient medical history.
  *
@@ -40,7 +40,9 @@ type SummarizePatientHistoryRawInput = Omit<SummarizePatientHistoryInput, 'aller
 };
 
 export async function summarizePatientHistory(rawInput: SummarizePatientHistoryRawInput): Promise<SummarizePatientHistoryOutput> {
-  // Create a processed input that will conform to SummarizePatientHistoryInputSchema
+  console.log('--- summarizePatientHistory: Function started ---');
+  console.log('--- summarizePatientHistory: Received rawInput:', JSON.stringify(rawInput));
+
   const processedInput: SummarizePatientHistoryInput = {
     patientId: rawInput.patientId,
     medicalHistoryNotes: rawInput.medicalHistoryNotes || undefined, // Ensure optional fields are undefined if empty
@@ -48,29 +50,20 @@ export async function summarizePatientHistory(rawInput: SummarizePatientHistoryR
 
   // --- CRITICAL FIX FOR ALLERGIES ---
   if (typeof rawInput.allergies === 'string') {
-    // If it's a string (like ""), convert it to an array.
-    // .split(',') will turn "" into [""]
-    // .map(a => a.trim()) will turn [""] into [""]
-    // .filter(Boolean) will remove falsey values, so [""] becomes []
     processedInput.allergies = rawInput.allergies.split(',').map(a => a.trim()).filter(Boolean);
   } else if (Array.isArray(rawInput.allergies)) {
-    // If it's already an array, ensure it's an array of non-empty strings
     processedInput.allergies = rawInput.allergies.filter(a => typeof a === 'string' && a.trim() !== '');
   } else {
-    // If it's null, undefined, or any other type, default to an empty array
     processedInput.allergies = [];
   }
 
   // --- FIX FOR currentMedications (similar issue often happens here) ---
   if (typeof rawInput.currentMedications === 'string') {
-    // Assuming currentMedications string might be similar to your form's multiline notes
-    // This is a basic example; you might need more robust parsing here based on the string format.
     processedInput.currentMedications = rawInput.currentMedications.split('\n').map(line => {
       const parts = line.split(' ');
       return { name: parts[0] || "Unknown", dosage: parts[1] || "", frequency: parts.slice(2).join(' ') || "" };
     }).filter(m => m.name !== "Unknown" || m.dosage !== "" || m.frequency !== "");
   } else if (Array.isArray(rawInput.currentMedications)) {
-    // If it's already an array, filter out any invalid entries if necessary
     processedInput.currentMedications = rawInput.currentMedications.filter(m =>
       typeof m === 'object' && m !== null && 'name' in m && 'dosage' in m && 'frequency' in m
     );
@@ -79,8 +72,22 @@ export async function summarizePatientHistory(rawInput: SummarizePatientHistoryR
   }
   // --- END FIX FOR currentMedications ---
 
-  // Now, pass the processed and schema-conforming input to the Genkit flow.
-  return summarizePatientHistoryFlow(processedInput); // This call will now pass valid data.
+  console.log('--- summarizePatientHistory: Processed Input for Genkit:', JSON.stringify(processedInput));
+
+  try {
+    const result = await summarizePatientHistoryFlow(processedInput); // This is where the error likely originates
+    console.log('--- summarizePatientHistory: Genkit flow completed successfully. ---');
+    console.log('--- summarizePatientHistory: Function ending successfully. ---');
+    return result;
+  } catch (error) {
+    // *** THIS IS THE CRUCIAL PART - Log the error details ***
+    console.error('--- summarizePatientHistory: ERROR encountered during Genkit flow ---');
+    console.error('--- summarizePatientHistory: Error message:', (error as Error).message);
+    console.error('--- summarizePatientHistory: Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    console.error('--- summarizePatientHistory: Error stack trace:', (error as Error).stack);
+    console.error('--- summarizePatientHistory: Function ending with error. ---');
+    throw error; // Re-throw the error so the 500 still happens, but we've captured the details
+  }
 }
 
 const prompt = ai.definePrompt({
@@ -131,9 +138,11 @@ const summarizePatientHistoryFlow = ai.defineFlow(
     outputSchema: SummarizePatientHistoryOutputSchema,
   },
   async (input: SummarizePatientHistoryInput) => {
+    console.log('--- summarizePatientHistoryFlow: Executing AI prompt ---');
     const {output} = await prompt(input);
+    console.log('--- summarizePatientHistoryFlow: AI prompt returned. Output present:', !!output);
     if (!output) {
-        console.error('AI prompt did not return an output for summarizePatientHistoryFlow.');
+        console.error('--- summarizePatientHistoryFlow: AI prompt did not return an output. ---');
         throw new Error("AI failed to generate a patient history summary.");
     }
     return output;
