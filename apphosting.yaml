@@ -11,6 +11,7 @@ runConfig:
   memoryMiB: 512 # Memory allocated per instance (in MiB)
 
 # Environment variables made available to your application during build and runtime.
+
 env:
   # Reference the GenAI API key from Google Cloud Secret Manager.
   # This keeps your actual key out of source control (GitHub).
