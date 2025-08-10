@@ -1,16 +1,9 @@
-# Settings to manage and configure a Firebase App Hosting backend.
-# https://firebase.google.com/docs/app-hosting/configure
-
-runConfig:
-  maxInstances: 1
-
-# The 'env' section is completely omitted for these variables.
-# This means your running App Hosting backend WILL NOT have
-# process.env.SERVICE_ACCOUNT_KEY or process.env.GOOGLE_API_KEY available.
-# Any code in your backend that relies on these environment variables
-# will likely fail.
-
-# The Firebase App Hosting build environment still implicitly sets FIREBASE_CONFIG
-# and FIREBASE_WEBAPP_CONFIG for your client-side app.
-# You will still need to ensure your client-side code correctly uses these.
-
+# In your apphosting.yaml file
+# ... other configurations ...
+env:
+  - variable: google_api_key
+    value: "AIzaSyANC2F_FhjAi7k0lKH4aflBCPPRxhJIdj8" # <<< IMPORTANT: Replace with your key!
+    availability:
+      - BUILD
+      - RUNTIME
+# ... rest of your file ...
