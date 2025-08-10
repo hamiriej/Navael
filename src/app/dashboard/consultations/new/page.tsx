@@ -12,7 +12,7 @@ import { z } from "zod";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format, parseISO, setHours, setMinutes } from "date-fns";
-import { cn } => "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
