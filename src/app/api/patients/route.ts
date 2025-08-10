@@ -10,6 +10,7 @@ import { Patient } from '@/contexts/patient-context'; // IMPORT YOUR PATIENT INT
  * structure from the frontend, meaning firstName, lastName, dateOfBirth (as YYYY-MM-DD string),
  * and all other patient properties, but without 'id' or 'createdAt' as they are generated server-side.
  */
+
 export async function POST(req: NextRequest) {
   try {
     // The request body will contain the data that your frontend `addPatient`
