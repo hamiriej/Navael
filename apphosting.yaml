@@ -45,6 +45,8 @@ env:
       - BUILD
       - RUNTIME
 
+
+
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
     value: "1:36160001734:web:ee096485297757ec1c29c7"
     availability:
