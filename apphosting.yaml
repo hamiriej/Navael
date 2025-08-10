@@ -17,6 +17,7 @@ env:
   - variable: google_api_key # <--- This must be 'google_api_key' (lowercase)
     secret: genai_api_key     # <--- This is the NAME of your secret in Secret Manager
 
+
   # FIREBASE_CONFIG and FIREBASE_WEBAPP_CONFIG are typically automatically
   # injected by App Hosting, so you don't usually need to define them here.
   # However, if you have other custom environment variables, you can add them like so:
