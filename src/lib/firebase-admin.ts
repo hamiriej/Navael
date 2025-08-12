@@ -9,6 +9,7 @@ if (!admin.apps.length) {
   if (!serviceAccountKey) {
     throw new Error('SERVICE_ACCOUNT_KEY environment variable is not set. Please define it in Firebase Functions secrets or your .env file.');
   }
+ 
 
   let serviceAccount: admin.ServiceAccount;
 
