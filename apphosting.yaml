@@ -19,6 +19,7 @@ env:
       - BUILD
       - RUNTIME
 
+
   # Add Firebase environment variables below
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
     value: "AIzaSyBKm9xhWBogV4Muk3d70rn6_-lo73T2irw"
