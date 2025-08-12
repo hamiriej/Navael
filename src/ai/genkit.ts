@@ -13,7 +13,6 @@ if (!process.env.google_api_key || process.env.google_api_key.trim() === "") {
   // The application might still try to proceed but AI calls will fail.
 }
 
-
 export const ai = genkit({
   plugins: [googleAI({apiKey: process.env.google_api_key})], // Explicitly pass API key
   model: 'googleai/gemini-2.0-flash',
