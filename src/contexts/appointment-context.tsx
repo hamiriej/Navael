@@ -11,12 +11,13 @@ import {
 import { type Appointment } from '@/app/dashboard/appointments/page';
 import { logActivity } from '@/lib/activityLog';
 import { useAuth } from './auth-context';
+import { ulid } from 'ulid';
 import {
   collection,
   doc,
   getDocs,
   getDoc,
-  addDoc,
+  setDoc,
   updateDoc,
   query,
   where,
@@ -53,8 +54,10 @@ async function fetchAppointmentByIdFromFirestore(id: string): Promise<Appointmen
 }
 
 async function createAppointmentInFirestore(newAppointment: Omit<Appointment, "id">): Promise<Appointment> {
-  const ref = await addDoc(collection(db, APPOINTMENTS_COLLECTION), newAppointment);
-  return { id: ref.id, ...newAppointment };
+  const appointmentId = ulid(); // Generate a new, sortable ULID
+  const appointmentRef = doc(db, APPOINTMENTS_COLLECTION, appointmentId);
+  await setDoc(appointmentRef, newAppointment);
+  return { id: appointmentId, ...newAppointment };
 }
 
 async function updateAppointmentInFirestore(id: string, updatedData: Partial<Omit<Appointment, "id">>): Promise<Appointment> {

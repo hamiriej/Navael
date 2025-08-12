@@ -10,6 +10,8 @@ import { formatCurrency } from '@/lib/utils';
 import { useAppearanceSettings } from './appearance-settings-context';
 
 // NEW: Import useAppointments context
+import { ulid } from 'ulid';
+
 import { useAppointments } from './appointment-context';
 
 // Firestore imports
@@ -134,6 +136,7 @@ export function InvoiceProvider({ children }: { children: ReactNode }) {
     setIsLoadingInvoicesState(true);
     try {
       const createdApi = await callApi<Invoice>(`${API_BASE_URL}/invoices`, {
+        // Ensure the id is also included when creating an invoice
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newInvoiceData),

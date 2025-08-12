@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 // Using the existing Patient and AugmentedPatient types
-import { PATIENT_STORAGE_KEY, type Patient, type AugmentedPatient } from '@/contexts/patient-context'; 
+import { PATIENTS_STORAGE_KEY, type Patient, type AugmentedPatient } from '@/contexts/patient-context'; 
 import { usePatients } from './patient-context'; // Keep this import, though not directly used in the login logic for now
 
 interface PatientAuthContextType {
@@ -63,7 +63,7 @@ export function PatientAuthProvider({ children }: { children: ReactNode }) {
     // Simulate API call by directly checking localStorage for patient data
     // In a real app, this would be a fetch to a backend endpoint.
     try {
-      const storedPatients = localStorage.getItem(PATIENT_STORAGE_KEY);
+      const storedPatients = localStorage.getItem(PATIENTS_STORAGE_KEY);
       if (!storedPatients) {
         // This simulates a scenario where the backend has no patient data.
         setLoginError("No patient records found in the system. Please contact support.");

@@ -8,7 +8,7 @@ import { logActivity } from '@/lib/activityLog'; // Assuming this path is correc
 import { useAuth } from './auth-context'; // Assuming this path is correct
 import { format } from 'date-fns'; // Using date-fns for date formatting
 
-export const PATIENT_STORAGE_KEY = 'patientId';
+export const PATIENTS_STORAGE_KEY = 'navael_patients';
 
 // --- Refined Patient Interface (for Database Storage) ---
 // This interface defines the structure of a patient object AS IT WILL BE STORED IN FIRESTORE.
@@ -429,8 +429,8 @@ const updatePatient = useCallback(async (
         actorName: username || "System",
         actionDescription: `Updated patient details: ${augmentedPatient.name}`,
         targetEntityType: "Patient",
-        targetEntityId: augmentedPatient.id,
-        iconName: "UserEdit",
+        targetEntityId: augmentedPatient.id, // Corrected icon name
+        iconName: "FileEdit",
       });
 
       return augmentedPatient;
