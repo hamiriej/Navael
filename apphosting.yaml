@@ -57,3 +57,9 @@ env:
     availability:
       - BUILD
       - RUNTIME
+
+  - variable: SERVICE_ACCOUNT_KEY
+    secret: service_account_key
+    availability:
+      - BUILD
+      - RUNTIME
