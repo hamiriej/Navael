@@ -11,7 +11,6 @@ import {
 import { type Appointment } from '@/app/dashboard/appointments/page';
 import { logActivity } from '@/lib/activityLog';
 import { useAuth } from './auth-context';
-import { ulid } from 'ulid';
 import {
   collection,
   doc,
@@ -21,6 +20,7 @@ import {
   updateDoc,
   query,
   where,
+  runTransaction,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
@@ -53,8 +53,35 @@ async function fetchAppointmentByIdFromFirestore(id: string): Promise<Appointmen
   return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } as Appointment : undefined;
 }
 
+async function generateNextAppointmentId(): Promise<string> {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = (now.getMonth() + 1).toString().padStart(2, '0');
+  const monthId = `${year}-${month}`;
+
+  const counterRef = doc(db, "counters", "appointments");
+  let newSequence = 1;
+
+  try {
+    await runTransaction(db, async (transaction) => {
+      const counterDoc = await transaction.get(counterRef);
+      if (counterDoc.exists()) {
+        const monthSequence = counterDoc.data()[monthId] || 0;
+        newSequence = monthSequence + 1;
+      }
+      transaction.set(counterRef, { [monthId]: newSequence }, { merge: true });
+    });
+  } catch (e) {
+    console.error("Transaction to generate appointment ID failed: ", e);
+    throw new Error("Could not generate appointment ID.");
+  }
+
+  const sequenceString = newSequence.toString().padStart(3, '0');
+  return `APP${year}-${month}-${sequenceString}`;
+}
+
 async function createAppointmentInFirestore(newAppointment: Omit<Appointment, "id">): Promise<Appointment> {
-  const appointmentId = ulid(); // Generate a new, sortable ULID
+  const appointmentId = await generateNextAppointmentId();
   const appointmentRef = doc(db, APPOINTMENTS_COLLECTION, appointmentId);
   await setDoc(appointmentRef, newAppointment);
   return { id: appointmentId, ...newAppointment };
